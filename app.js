@@ -823,6 +823,7 @@ function ocHtml(o, ro) {
       '<a class="oc-b" href="' + esc(nav) + '" target="_blank" rel="noopener">' + OCI.nav + '<span>Google Maps</span></a>' +
       '<button type="button" class="oc-b" data-act="oc-close">' + OCI.map + '<span>Navegar en la app</span></button></div>';
     if (o.tel) h += '<div class="oc-btns two"><a class="oc-b flat" href="tel:' + esc(String(o.tel).replace(/[^\d+]/g, '')) + '">' + OCI.tel + '<span>Llamar</span></a>' + (wa ? '<a class="oc-b flat" href="' + esc(wa) + '" target="_blank" rel="noopener">' + OCI.wa + '<span>WhatsApp</span></a>' : '') + '</div>';
+    if (reco && wa) { const msg = 'Hola' + (o.cliente ? ' ' + String(o.cliente).split(' ')[0] : '') + ', soy ' + (S.name || 'tu repartidor') + ' de Gasca. Llevo tu pedido de ' + (o.shop || 'tu restaurante') + ' y voy en camino. ¿Me compartes tu ubicación por aquí para entregártelo más rápido? 🛵'; h += '<a class="oc-b wide go" href="' + esc(wa + '?text=' + encodeURIComponent(msg)) + '" target="_blank" rel="noopener">' + OCI.wa + '<span>Voy en camino · avisar al cliente</span></a>'; }
     if (reco) h += '<button type="button" class="oc-b wide" data-act="noans" data-id="' + esc(o.id) + '">⌛ El cliente no responde</button>';
     if (reco) h += '<button type="button" class="oc-b wide" data-act="libcode" data-id="' + esc(o.id) + '">🔑 Tengo un código de administración</button>';
     h += '<button type="button" class="oc-b wide" data-act="issue" data-id="' + esc(o.id) + '">🛟 Soporte · Tengo un problema</button>';
@@ -1556,7 +1557,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '23-oct-2026 · 32';
+const APP_V = '23-oct-2026 · 33';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -2176,6 +2177,9 @@ document.addEventListener('click', (e) => {
   else if (act === 'issue') askIssue(id);
   else if (act === 'noans') askNoAns(id);
   else if (act === 'libcode') askLib(id);
+  else if (act === 'gula-open') gulaOpen();
+  else if (act === 'gula-fill') gulaFill();
+  else if (act === 'gula-close') { const m = document.getElementById('gulaModal'); if (m) m.remove(); }
   else if (act === 'inc-code') incCode(id, b.getAttribute('data-oid'));
   else if (act === 'inc-release') incRelease(id, b.getAttribute('data-oid'));
   else if (act === 'inc-ok') incDone(id);
@@ -3119,6 +3123,11 @@ function wzSave() {
 function wzFill(o, ids) {
   ids.forEach((i) => { if (o[i] !== undefined && $('#' + i)) { $('#' + i).value = o[i]; $('#' + i).dispatchEvent(new Event('input', { bubbles: true })); } });
 }
+function gulaBox() {
+  let g = document.getElementById('wzGula');
+  if (!g) { g = document.createElement('div'); g.id = 'wzGula'; g.innerHTML = '<button type="button" class="btn ghost block" data-act="gula-open">📋 Pegar pedido de Gula</button><small style="display:block;text-align:center;opacity:.7;margin-top:4px">Pega el mensaje de WhatsApp y llenamos los datos de entrega por ti.</small>'; const l = document.getElementById('wzLast'); if (l && l.parentNode) l.parentNode.insertBefore(g, l); else document.getElementById('orderForm').appendChild(g); }
+  return g;
+}
 function wzBuild() {
   const cli = isCli(S.profile);
   const addr = [wzF('o-calle'), $('#o-num').parentElement.parentElement, wzF('o-col'), wzF('o-ciudad'), wzF('o-mun'), wzF('o-ref')];
@@ -3135,7 +3144,7 @@ function wzBuild() {
     { t: '🏠 ¿A qué dirección se lleva el pedido?', h: 'La dirección de quien lo recibe, a donde el repartidor va a entregar. Mientras más claro, más rápido llega.', e: addr },
     { t: '✅ Revisa tu pedido', h: 'Si todo está bien, toca Generar pedido.', e: [sum, $('#paySum'), btn], last: true }
   ] : [
-    { t: '¿Qué se entrega?', ic: WZ_POT, h: 'Por ejemplo: 2 pizzas grandes y 1 refresco.', e: [wzF('o-desc'), $('#wzLast')] },
+    { t: '¿Qué se entrega?', ic: WZ_POT, h: 'Por ejemplo: 2 pizzas grandes y 1 refresco.', e: [wzF('o-desc'), gulaBox(), $('#wzLast')] },
     { t: '🙋 ¿A quién se lo entregamos?', h: 'Nombre y WhatsApp de tu cliente. Si ya le has enviado antes, tócalo abajo.', e: who },
     { t: '🏠 ¿A qué dirección se lleva el pedido?', h: 'La dirección de tu cliente, a donde el repartidor va a entregar. Mientras más claro, más rápido llega.', e: addr },
     { t: '💵 ¿Cuánto se cobra?', h: 'Si el cliente ya pagó, deja "Cobrar al cliente" vacío.', e: pay },
@@ -4235,3 +4244,61 @@ function ensureCodes() {
   } catch (e) {}
 }
 setInterval(ensureCodes, 2500);
+
+/* ---------- Pegar pedido de Gula: Gasca toma solo los datos de entrega ---------- */
+const gNrm = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 #\/]/g, ' ').replace(/\s+/g, ' ').trim();
+function parseGula(text) {
+  const out = {}, items = []; let cur = null;
+  const set = (k, v) => { v = String(v || '').replace(/[*_~`]/g, '').trim(); if (v && !out[k]) out[k] = v; };
+  String(text || '').split(/\r?\n/).forEach((raw) => {
+    const line = raw.replace(/[*_~`]/g, '').replace(/^[\s•\-–—>·]+/, '').trim(); if (!line) return;
+    const m = /^([^:：]{2,30})[:：]\s*(.*)$/.exec(line);
+    if (!m) { if (cur === 'desc') items.push(line); return; }
+    const k = gNrm(m[1]), v = m[2].trim(); cur = null;
+    if (/^(nombre|cliente|a nombre de|nombre del cliente|recibe|quien recibe)$/.test(k)) set('cliente', v);
+    else if (/^(tel|telefono|whatsapp|celular|cel|numero de telefono|numero de celular|contacto)$/.test(k)) set('tel', v);
+    else if (/^(calle)$/.test(k)) set('calle', v);
+    else if (/^(numero|num|no|numero exterior|num ext|#|ext|exterior)$/.test(k)) set('num', v);
+    else if (/^(interior|int|numero interior|num int)$/.test(k)) set('int', v);
+    else if (/^(colonia|col|fraccionamiento|fracc|barrio)$/.test(k)) set('col', v);
+    else if (/^(ciudad|localidad|poblacion)$/.test(k)) set('ciudad', v);
+    else if (/^(municipio|mun|delegacion)$/.test(k)) set('mun', v);
+    else if (/^(referencia|referencias|ref|entre calles|indicaciones|notas|nota|comentarios)$/.test(k)) set('ref', v);
+    else if (/^(direccion|domicilio|direccion de entrega|entregar en|dir)$/.test(k)) set('dir', v);
+    else if (/^(pedido|orden|productos|producto|detalle|detalle del pedido|platillos|articulos|menu|mi pedido|tu pedido)$/.test(k)) { cur = 'desc'; if (v) items.push(v); }
+  });
+  if (items.length) out.desc = items.join(', ').replace(/\s+/g, ' ');
+  if (out.tel) { const d = String(out.tel).replace(/\D/g, ''); out.tel = d.length > 10 ? d.slice(-10) : d; }
+  if (out.dir && !out.calle) {
+    const parts = out.dir.split(',').map((x) => x.trim()).filter(Boolean);
+    const mm = /^(.*?)(?:\s+(?:#|no\.?\s*|num\.?\s*)?(\d+[A-Za-z]?))?$/i.exec(parts[0] || '');
+    out.calle = (mm && mm[1]) || parts[0] || ''; if (mm && mm[2] && !out.num) out.num = mm[2];
+    const rest = parts.slice(1).map((x) => x.replace(/^(col\.?|colonia|fracc\.?|fraccionamiento)\s+/i, ''));
+    if (rest[0] && !out.col) out.col = rest[0]; if (rest[1] && !out.ciudad) out.ciudad = rest[1]; if (rest[2] && !out.mun) out.mun = rest[2];
+  }
+  if (out.calle && !out.num) { const mm = /^(.*?)\s+(?:#|no\.?\s*|num\.?\s*)?(\d+[A-Za-z]?)$/i.exec(out.calle); if (mm) { out.calle = mm[1]; out.num = mm[2]; } }
+  return out;
+}
+function gulaOpen() {
+  if (document.getElementById('gulaModal')) return;
+  if (!document.getElementById('gulaCss')) { const st = document.createElement('style'); st.id = 'gulaCss'; st.textContent = '#gulaModal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;z-index:9999;padding:12px}#gulaModal .box{background:var(--surface);color:var(--ink);border-radius:16px;padding:18px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto}#gulaModal h3{margin:0 0 8px}#gulaModal textarea{width:100%;box-sizing:border-box;min-height:150px;margin:8px 0;padding:10px;border:2px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font-size:16px}#gulaModal .gm-res{font-size:14px;line-height:1.5;margin:6px 0 10px}#gulaModal .btn{margin-top:6px}'; document.head.appendChild(st); }
+  const m = document.createElement('div'); m.id = 'gulaModal';
+  m.innerHTML = '<div class="box"><h3>📋 Pegar pedido de Gula</h3><p>Copia el mensaje de WhatsApp que te llegó y pégalo aquí. Gasca toma solo los datos de entrega.</p><textarea id="gulaTxt" placeholder="Pega aquí el pedido"></textarea><div class="gm-res" id="gulaRes"></div><button class="btn primary block" type="button" data-act="gula-fill">Llenar mi pedido</button><button class="btn ghost block" type="button" data-act="gula-close">Cancelar</button></div>';
+  document.body.appendChild(m);
+  m.addEventListener('click', (e) => { if (e.target === m) m.remove(); });
+  try { document.getElementById('gulaTxt').focus(); } catch (e) {}
+}
+function gulaFill() {
+  const t = (document.getElementById('gulaTxt') || {}).value || '', r = document.getElementById('gulaRes');
+  const g = parseGula(t);
+  const pp = String(S.addr || '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (!g.ciudad && pp.length >= 2) g.ciudad = pp[pp.length - 2]; if (!g.mun && pp.length >= 1) g.mun = pp[pp.length - 1];
+  const map = { 'o-cliente': g.cliente, 'o-tel': g.tel, 'o-calle': g.calle, 'o-num': g.num, 'o-int': g.int, 'o-col': g.col, 'o-ciudad': g.ciudad, 'o-mun': g.mun, 'o-ref': g.ref, 'o-desc': g.desc && g.desc.slice(0, 120) };
+  const found = Object.keys(map).filter((k) => map[k]);
+  if (!g.calle && !g.cliente && !g.tel) { if (r) r.innerHTML = '<b style="color:var(--red)">No encontré datos de entrega.</b> Revisa que pegaste el mensaje completo.'; return; }
+  const o = {}; found.forEach((k) => { o[k] = map[k]; }); wzFill(o, found);
+  const need = ['o-desc', 'o-cliente', 'o-tel', 'o-calle', 'o-num', 'o-col'].filter((k) => !map[k] || (k === 'o-tel' && String(map[k]).length < 10));
+  const mdl = document.getElementById('gulaModal'); if (mdl) mdl.remove();
+  if (need.length) { toast('Llené lo que encontré. Revisa y completa lo que falte.'); if (!wzOff()) wzGo(0); }
+  else { toast('Listo. Revisa los datos y escribe cuánto se cobra y el pago al repartidor.'); if (!wzOff()) wzGo(3); }
+}
