@@ -823,7 +823,7 @@ function ocHtml(o, ro) {
       '<a class="oc-b" href="' + esc(nav) + '" target="_blank" rel="noopener">' + OCI.nav + '<span>Google Maps</span></a>' +
       '<button type="button" class="oc-b" data-act="oc-close">' + OCI.map + '<span>Navegar en la app</span></button></div>';
     if (o.tel) h += '<div class="oc-btns two"><a class="oc-b flat" href="tel:' + esc(String(o.tel).replace(/[^\d+]/g, '')) + '">' + OCI.tel + '<span>Llamar</span></a>' + (wa ? '<a class="oc-b flat" href="' + esc(wa) + '" target="_blank" rel="noopener">' + OCI.wa + '<span>WhatsApp</span></a>' : '') + '</div>';
-    if (reco && wa) { const msg = 'Hola' + (o.cliente ? ' ' + String(o.cliente).split(' ')[0] : '') + ', soy ' + (S.name || 'tu repartidor') + ' de Gasca. Llevo tu pedido de ' + (o.shop || 'tu restaurante') + ' y voy en camino. ¿Me compartes tu ubicación por aquí para entregártelo más rápido? 🛵'; h += '<a class="oc-b wide go" href="' + esc(wa + '?text=' + encodeURIComponent(msg)) + '" target="_blank" rel="noopener">' + OCI.wa + '<span>Voy en camino · avisar al cliente</span></a>'; }
+    if (reco && wa) { const hh = new Date().getHours(), sal = hh < 12 ? 'Buenos días' : hh < 20 ? 'Buenas tardes' : 'Buenas noches', per = !!pdesc(o).tipo, quien = per ? 'un envío de ' + (o.shop || 'tu contacto') : 'tu pedido de ' + (o.shop || 'tu restaurante'); const msg = sal + (o.cliente ? ' ' + String(o.cliente).split(' ')[0] : '') + ', soy ' + (S.name || 'tu repartidor') + ' de Gasca. Llevo ' + quien + ' y voy en camino. ¿Me podrías compartir tu ubicación por aquí para entregártelo más rápido? 🛵'; h += '<a class="oc-b wide go" href="' + esc(wa + '?text=' + encodeURIComponent(msg)) + '" target="_blank" rel="noopener">' + OCI.wa + '<span>Voy en camino · avisar al cliente</span></a>'; }
     if (reco) h += '<button type="button" class="oc-b wide" data-act="noans" data-id="' + esc(o.id) + '">⌛ El cliente no responde</button>';
     if (reco) h += '<button type="button" class="oc-b wide" data-act="libcode" data-id="' + esc(o.id) + '">🔑 Tengo un código de administración</button>';
     h += '<button type="button" class="oc-b wide" data-act="issue" data-id="' + esc(o.id) + '">🛟 Soporte · Tengo un problema</button>';
@@ -1557,7 +1557,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '23-oct-2026 · 33';
+const APP_V = '23-oct-2026 · 34';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
