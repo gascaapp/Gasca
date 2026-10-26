@@ -160,6 +160,9 @@ const saldoC = () => (S.wallet && Number(S.wallet.saldoC)) || 0;
 const MAX_ACT = 3; // máximo de pedidos que un repartidor lleva a la vez (asignados, recogidos o con oferta esperando)
 const slotsUsed = () => { try { const act = mine().filter((o) => o.estado === 'asignado' || o.estado === 'recogido').length; const pend = (S.ofertas || []).filter((x) => x.estado === 'pendiente' && String(x.id).endsWith('_' + S.uid) && byId(String(x.id).slice(0, -(S.uid.length + 1))) && byId(String(x.id).slice(0, -(S.uid.length + 1))).estado === 'abierto').length; return act + pend; } catch (e) { return 0; } };
 const riderFull = () => S.role === 'rider' && slotsUsed() >= MAX_ACT;
+// Mientras espera a un cliente que no sale (cronómetro de 8 min corriendo) no recibe ni ve pedidos nuevos.
+const riderWaiting = () => { try { return S.role === 'rider' && mine().some((o) => o.estado === 'recogido' && Number(lsGet('gasca_na_' + o.id)) > 0 && !lsGet('gasca_naSent_' + o.id)); } catch (e) { return false; } };
+const riderBlocked = () => riderFull() || riderWaiting();
 const canTake = (o) => S.walletReady && !!S.wallet && saldoC() >= comC(o);
 
 /* ---------- verificación de documentos ---------- */
@@ -657,7 +660,7 @@ async function counter(id, m) {
   const o = byId(id);
   if (!canAct() || view() !== 'rider' || !o || o.estado !== 'abierto' || S.busy.has('of' + id)) return;
   if (!S.online) { toast('Conéctate para ofertar.'); return; }
-  if (riderFull()) { toast('Ya llevas ' + MAX_ACT + ' pedidos. Entrega alguno para tomar más.'); return; }
+  if (riderBlocked()) { toast(riderWaiting() ? 'Estás esperando a un cliente. Termina esa espera para tomar más pedidos.' : 'Ya llevas ' + MAX_ACT + ' pedidos. Entrega alguno para tomar más.'); return; }
   if (saldoC() < m * COM_C) { toast('Tu saldo no alcanza para esa oferta. Recarga.'); S.tab = 'saldo'; render(); return; }
   S.busy.add('of' + id); render();
   try {
@@ -714,7 +717,7 @@ function onOpenOrders(snap) {
   if (S.online && fresh.length) {
     fresh.sort((a, b) => b.creadoEn - a.creadoEn);
     let pushed = 0;
-    fresh.forEach((o) => { if (!riderFull() && !S.ignored.has(o.id) && inMyZone(o) && S.queue.indexOf(o.id) < 0) { S.queue.unshift(o.id); pushed++; } });
+    fresh.forEach((o) => { if (!riderBlocked() && !S.ignored.has(o.id) && inMyZone(o) && S.queue.indexOf(o.id) < 0) { S.queue.unshift(o.id); pushed++; } });
     if (pushed) { beep(); buzz(); }
   }
   syncSheet(); render();
@@ -832,7 +835,7 @@ function ocHtml(o, ro) {
       '<button type="button" class="oc-b" data-act="oc-close">' + OCI.map + '<span>Navegar en la app</span></button></div>';
     if (o.tel) h += '<div class="oc-btns" style="grid-template-columns:1fr"><a class="oc-b flat" href="tel:' + esc(String(o.tel).replace(/[^\d+]/g, '')) + '">' + OCI.tel + '<span>Llamar</span></a></div>';
     if (reco && wa) h += '<a class="oc-b wide go" href="' + esc(waLocUrl(o)) + '" target="_blank" rel="noopener">' + OCI.wa + '<span>Pedir ubicación por WhatsApp</span></a>';
-    if (reco) h += '<button type="button" class="oc-b wide" data-act="noans" data-id="' + esc(o.id) + '">⌛ El cliente no responde</button>';
+    if (reco) h += '<button type="button" class="oc-b wide" data-act="noans" data-id="' + esc(o.id) + '">' + (Number(lsGet('gasca_na_' + o.id)) > 0 ? '⌛ Espera en curso · toca para ver el tiempo' : '⌛ El cliente no responde') + '</button>';
     if (reco) h += '<button type="button" class="oc-b wide" data-act="libcode" data-id="' + esc(o.id) + '">🔑 Tengo un código de administración</button>';
     h += '<button type="button" class="oc-b wide" data-act="issue" data-id="' + esc(o.id) + '">🛟 Soporte · Tengo un problema</button>';
   }
@@ -908,7 +911,7 @@ function UI_goMap(id) { try { const u = window.__gmap; if (u) { u.fitKey = ''; }
 async function accept(id) {
   if (!canAct() || S.busy.has(id) || view() !== 'rider') return;
   if (!S.online) { toast('Conéctate para aceptar pedidos.'); return; }
-  if (riderFull()) { toast('Ya llevas ' + MAX_ACT + ' pedidos. Entrega alguno para tomar más.'); return; }
+  if (riderBlocked()) { toast(riderWaiting() ? 'Estás esperando a un cliente. Termina esa espera para tomar más pedidos.' : 'Ya llevas ' + MAX_ACT + ' pedidos. Entrega alguno para tomar más.'); return; }
   const raw = S.openOrders.find((x) => x.id === id);
   if (raw && !liveR(raw)) { toast('Ese pedido ya venció.'); return; }
   const oo = byId(id);
@@ -1223,7 +1226,7 @@ function copyCode(c) {
 const OFFER_MS = 40000;
 function syncSheet() {
   if (!S.online || view() !== 'rider') { S.sheetId = null; S.gone = {}; S.seen = new Set(); renderSheet(); return; }
-  if (riderFull()) { S.queue = []; S.sheetId = null; renderSheet(); return; }
+  if (riderBlocked()) { S.queue = []; S.sheetId = null; renderSheet(); return; }
   S.gone = S.gone || {}; S.seen = S.seen || new Set();
   const now = Date.now(), keep = [];
   S.queue.forEach((id) => {
@@ -1565,7 +1568,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '23-oct-2026 · 36';
+const APP_V = '23-oct-2026 · 38';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -1665,7 +1668,7 @@ function renderRider() {
     const far = S.online ? S.openOrders.filter(liveR).filter((x) => !inMyZone(x)) : [];
     const lowS = S.online && S.walletReady && S.openOrders.filter(liveR).some((x) => !canTake(x));
     const hint = (lowS ? '<p class="warn">Tu saldo no alcanza para algunos pedidos. Recarga en la motito.</p>' : '') + (far.length ? '<p class="warn">Hay ' + far.length + (far.length === 1 ? ' pedido abierto' : ' pedidos abiertos') + ' que no te quedan cerca (a más de ' + (S.radioKm || 3) + ' km) o aún no se ubica su dirección.</p>' : '');
-    av.innerHTML = !S.openReady ? '' : riderFull() ? '<p class="warn">Ya llevas ' + MAX_ACT + ' pedidos. Entrega alguno para ver pedidos nuevos.</p>' : hint + (open.length ? '<div class="subhead">Pedidos disponibles (' + open.length + ')</div>' + open.map(availCard).join('') : '');
+    av.innerHTML = !S.openReady ? '' : riderBlocked() ? '<p class="warn">' + (riderWaiting() ? 'Estás esperando a un cliente. No verás pedidos nuevos hasta terminar esa espera.' : 'Ya llevas ' + MAX_ACT + ' pedidos. Entrega alguno para ver pedidos nuevos.') + '</p>' : hint + (open.length ? '<div class="subhead">Pedidos disponibles (' + open.length + ')</div>' + open.map(availCard).join('') : '');
   }
   try { renderSheet(); } catch (e) {}
   try { window.__mapSync && window.__mapSync({ offer: S.sheetId ? byId(S.sheetId) : null, active, act0: active.length ? active[active.length - 1] : null, done, doneToday }); } catch (e) { console.warn('mapa', e); }
@@ -2647,16 +2650,17 @@ function askNoAns(id) {
     const left = t0 ? t0 + wait - Date.now() : wait, ready = t0 && left <= 0;
     m.innerHTML = '<div class="box"><h3>📵 Ya llegué y no sale el cliente</h3>' +
       (!t0 ? '<p>Antes de avisar, espera en el domicilio <b>' + Math.round(wait / 60000) + ' minutos</b> e intenta llamar o escribir por WhatsApp al cliente. Mantén tu GPS encendido.</p><label for="naPhone" style="font-weight:700;font-size:14px">Tu WhatsApp para que soporte te contacte</label><input id="naPhone" type="tel" inputmode="numeric" maxlength="14" autocomplete="tel" placeholder="10 dígitos" value="' + esc(lsGet('gasca_myphone') || '') + '" style="width:100%;box-sizing:border-box;min-height:48px;margin:6px 0 10px;padding:10px;border:2px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font-size:17px"><button class="btn primary" type="button" id="naStart">Empezar a esperar</button>'
-        : ready ? '<p>Ya esperaste el tiempo. Si nadie contestó, avisa a administración. Se guardará tu ubicación para revisar el caso.</p><button class="btn primary" type="button" id="naSend"' + (sending ? ' disabled' : '') + '>' + (sending ? 'Enviando…' : 'Avisar a administración') + '</button>'
-        : '<p>Espera aquí e intenta contactar al cliente.</p><div style="font-size:44px;font-weight:800;text-align:center;margin:8px 0" id="naLeft">' + fmt(left) + '</div><p class="inc-note">El botón para avisar se activa cuando termine el tiempo.</p>') +
+        : ready ? '<p>Ya esperaste el tiempo. Si nadie contestó, avisa a administración. Se guardará tu ubicación para revisar el caso.</p><button class="btn primary" type="button" id="naSend"' + (sending ? ' disabled' : '') + '>' + (sending ? 'Enviando…' : 'Avisar a administración') + '</button><button class="btn ghost" type="button" id="naOut">✅ El cliente ya salió</button>'
+        : '<p>Espera aquí e intenta contactar al cliente.</p><div style="font-size:44px;font-weight:800;text-align:center;margin:8px 0" id="naLeft">' + fmt(left) + '</div><p class="inc-note">El botón para avisar se activa cuando termine el tiempo. Mientras esperas no recibes pedidos nuevos.</p><button class="btn primary" type="button" id="naOut">✅ El cliente ya salió</button>') +
       '<div class="err inc-note" id="naErr"></div><button class="btn ghost" type="button" id="naClose">Cerrar</button></div>';
     document.getElementById('naClose').addEventListener('click', close);
     const st = document.getElementById('naStart'); if (st) st.addEventListener('click', () => {
       const ph = (document.getElementById('naPhone').value || '').replace(/\D/g, '').slice(-10);
       if (ph.length !== 10) { const er = document.getElementById('naErr'); if (er) er.textContent = 'Escribe tu WhatsApp de 10 dígitos.'; return; }
-      lsSet('gasca_myphone', ph); t0 = Date.now(); lsSet(key, String(t0)); draw();
+      lsSet('gasca_myphone', ph); t0 = Date.now(); lsSet(key, String(t0)); draw(); try { syncSheet(); render(); } catch (e) {}
     });
     const sd = document.getElementById('naSend'); if (sd) sd.addEventListener('click', send);
+    const ou = document.getElementById('naOut'); if (ou) ou.addEventListener('click', () => { lsSet(key, ''); close(); toast('Qué bien. Entrega el pedido y desliza para marcarlo entregado.'); try { syncSheet(); render(); } catch (e) {} });
   };
   async function send() {
     if (sending) return; sending = true; draw();
@@ -2671,6 +2675,18 @@ function askNoAns(id) {
   draw();
   timer = setInterval(() => { if (!document.getElementById('issueModal')) { clearInterval(timer); return; } if (t0 && !sending) { const l = document.getElementById('naLeft'); const left = t0 + wait - Date.now(); if (left <= 0) draw(); else if (l) l.textContent = fmt(left); } }, 1000);
 }
+/* Si ya empezó la espera de "el cliente no sale", al volver a la app la ventana se abre sola con el tiempo que va corriendo. */
+const naSeen = new Set();
+function naResume() {
+  try {
+    if (S.role !== 'rider' || !S.uid || document.hidden || document.getElementById('issueModal')) return;
+    const o = mine().find((x) => x.estado === 'recogido' && Number(lsGet('gasca_na_' + x.id)) > 0 && !lsGet('gasca_naSent_' + x.id) && !naSeen.has(x.id));
+    if (o) { naSeen.add(o.id); askNoAns(o.id); }
+  } catch (e) {}
+}
+setInterval(naResume, 2000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { naSeen.clear(); setTimeout(naResume, 300); } });
+window.addEventListener('focus', () => { naSeen.clear(); setTimeout(naResume, 300); });
 function askLiberar(id) {
   const o = byId(id);
   if (!o || o.estado !== 'asignado' || document.getElementById('issueModal')) return;
