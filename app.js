@@ -564,7 +564,7 @@ function onOfertas(snap) {
   if (S.ofKnown && S.role !== 'rider') next.forEach((x) => { if (x.estado === 'pendiente' && !S.ofKnown.has(x.id)) { beep([660, 880]); toast((x.driverName || 'Un repartidor') + ' pide ' + pesos(x.monto) + ' por tu pedido.'); } });
   S.ofKnown = new Set(next.map((x) => x.id)); S.ofertas = next; render();
 }
-const expMs = () => Number(lsGet('gasca_exp')) || 25000;
+const expMs = () => Number(lsGet('gasca_exp')) || 40000;
 const isP = (o) => !!pdesc(o).tipo;
 const liveR = (o) => !isP(o) || o.estado !== 'abierto' || Date.now() - (o.creadoEn || 0) < expMs() + 5000;
 function deadline(o) { let t = o.creadoEn || 0; S.ofertas.forEach((x) => { if (x.orderId === o.id && x.estado === 'pendiente') t = Math.max(t, x.creadoEn || 0); }); return t + expMs(); }
@@ -1565,7 +1565,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '23-oct-2026 · 35';
+const APP_V = '23-oct-2026 · 36';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
