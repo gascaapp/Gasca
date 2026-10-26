@@ -794,6 +794,14 @@ const OCI = {
 function slHtml(key, id, text, locked) {
   return '<div class="sl' + (locked ? ' lock' : '') + '" data-sl="' + key + '" data-id="' + esc(id) + '" role="button" tabindex="0" aria-label="' + esc(text) + '"><span class="sl-t">' + esc(text) + '</span><i class="sl-h">' + (locked ? OCI.lock : OCI.arrow) + '</i></div>';
 }
+// Mensaje de WhatsApp para pedir la ubicación al cliente (se usa en la orden y en el recuadro del mapa)
+function waLocUrl(o) {
+  const wa = waUrl(o && o.tel); if (!wa) return '';
+  const hh = new Date().getHours(), sal = hh < 12 ? 'Buenos días' : hh < 20 ? 'Buenas tardes' : 'Buenas noches', per = !!pdesc(o).tipo;
+  const quien = per ? 'un envío de ' + (o.shop || 'tu contacto') : 'tu pedido de ' + (o.shop || 'tu restaurante');
+  const msg = sal + (o.cliente ? ' ' + String(o.cliente).split(' ')[0] : '') + ', soy ' + (S.name || 'tu repartidor') + ' de Gasca. Llevo ' + quien + ' y voy en camino. ¿Me podrías compartir tu ubicación por aquí para entregártelo más rápido? 🛵';
+  return wa + '?text=' + encodeURIComponent(msg);
+}
 function ocMoney(o, ro) {
   const d = pdesc(o), T = Number(o.tarifa) || 0, P = d.prod || 0, cobro = Number(o.cobro) || 0, com = comC(o) / 100, rec = d.quien === 'r';
   let h = '<div class="oc-pay">' + (cobro > 0 ? 'PAGO: EFECTIVO · cobra ' + pesos(cobro) : 'No cobres nada al entregar' + (d.tipo && !rec ? ' · quien envía te paga el envío' : '')) + '</div>';
@@ -822,8 +830,8 @@ function ocHtml(o, ro) {
     h += '<div class="oc-h2">Ruta ' + (asig ? 'al restaurante' : 'al cliente') + '</div><div class="oc-btns">' +
       '<a class="oc-b" href="' + esc(nav) + '" target="_blank" rel="noopener">' + OCI.nav + '<span>Google Maps</span></a>' +
       '<button type="button" class="oc-b" data-act="oc-close">' + OCI.map + '<span>Navegar en la app</span></button></div>';
-    if (o.tel) h += '<div class="oc-btns two"><a class="oc-b flat" href="tel:' + esc(String(o.tel).replace(/[^\d+]/g, '')) + '">' + OCI.tel + '<span>Llamar</span></a>' + (wa ? '<a class="oc-b flat" href="' + esc(wa) + '" target="_blank" rel="noopener">' + OCI.wa + '<span>WhatsApp</span></a>' : '') + '</div>';
-    if (reco && wa) { const hh = new Date().getHours(), sal = hh < 12 ? 'Buenos días' : hh < 20 ? 'Buenas tardes' : 'Buenas noches', per = !!pdesc(o).tipo, quien = per ? 'un envío de ' + (o.shop || 'tu contacto') : 'tu pedido de ' + (o.shop || 'tu restaurante'); const msg = sal + (o.cliente ? ' ' + String(o.cliente).split(' ')[0] : '') + ', soy ' + (S.name || 'tu repartidor') + ' de Gasca. Llevo ' + quien + ' y voy en camino. ¿Me podrías compartir tu ubicación por aquí para entregártelo más rápido? 🛵'; h += '<a class="oc-b wide go" href="' + esc(wa + '?text=' + encodeURIComponent(msg)) + '" target="_blank" rel="noopener">' + OCI.wa + '<span>Voy en camino · avisar al cliente</span></a>'; }
+    if (o.tel) h += '<div class="oc-btns" style="grid-template-columns:1fr"><a class="oc-b flat" href="tel:' + esc(String(o.tel).replace(/[^\d+]/g, '')) + '">' + OCI.tel + '<span>Llamar</span></a></div>';
+    if (reco && wa) h += '<a class="oc-b wide go" href="' + esc(waLocUrl(o)) + '" target="_blank" rel="noopener">' + OCI.wa + '<span>Pedir ubicación por WhatsApp</span></a>';
     if (reco) h += '<button type="button" class="oc-b wide" data-act="noans" data-id="' + esc(o.id) + '">⌛ El cliente no responde</button>';
     if (reco) h += '<button type="button" class="oc-b wide" data-act="libcode" data-id="' + esc(o.id) + '">🔑 Tengo un código de administración</button>';
     h += '<button type="button" class="oc-b wide" data-act="issue" data-id="' + esc(o.id) + '">🛟 Soporte · Tengo un problema</button>';
@@ -1557,7 +1565,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '23-oct-2026 · 34';
+const APP_V = '23-oct-2026 · 35';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -2358,7 +2366,7 @@ document.addEventListener('click', (e) => {
     const dtxt = r && r.m ? ' · ' + (r.m < 1000 ? Math.round(r.m / 10) * 10 + ' m' : (r.m / 1000).toFixed(1) + ' km') + ' · ' + Math.max(1, Math.round(r.s / 60)) + ' min' : '';
     const extra = pend ? ' · ubicando…' : miss ? ' · no la ubico en el mapa, usa Google Maps' : dtxt + (apx ? ' · aprox.' : '');
     const nav = mapsUrl(o.estado === 'asignado' ? o.pickup : o.dest); // Google encuentra la dirección escrita mejor que el mapa de apoyo
-    const html = '<span>' + esc(lbl + extra) + '</span><a href="' + esc(nav) + '" target="_blank" rel="noopener">Navegar en Google Maps</a><button type="button" class="gm-vo" data-act="oc-open" data-id="' + esc(o.id) + '">🧾 Ver orden de pedido</button>';
+    const html = '<span>' + esc(lbl + extra) + '</span><a href="' + esc(nav) + '" target="_blank" rel="noopener">Navegar en Google Maps</a>' + (o.estado === 'recogido' && waLocUrl(o) ? '<a class="gm-wa" href="' + esc(waLocUrl(o)) + '" target="_blank" rel="noopener">📍 Pedir ubicación por WhatsApp</a>' : '') + '<button type="button" class="gm-vo" data-act="oc-open" data-id="' + esc(o.id) + '">🧾 Ver orden de pedido</button>';
     if (UI.chip !== html) { UI.chip = html; chip.innerHTML = html; chip.hidden = false; }
   }
   window.__mapSync = sync; window.__gmap = UI;
