@@ -1568,7 +1568,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '23-oct-2026 · 39';
+const APP_V = '27-oct-2026 · 40';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -4276,7 +4276,7 @@ setInterval(ensureCodes, 2500);
 const gNrm = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 #\/]/g, ' ').replace(/\s+/g, ' ').trim();
 function parseGula(text) {
   const out = {}, items = []; let cur = null;
-  const set = (k, v) => { v = String(v || '').replace(/[*_~`]/g, '').trim(); if (v && !out[k]) out[k] = v; };
+  const set = (k, v) => { v = String(v || '').replace(/[*_~`]/g, '').trim(); if (!v) return; if (k === 'ref' && out.ref) { if (out.ref.toLowerCase().indexOf(v.toLowerCase()) < 0) out.ref += '. ' + v; return; } if (!out[k]) out[k] = v; };
   String(text || '').split(/\r?\n/).forEach((raw) => {
     const line = raw.replace(/[*_~`]/g, '').replace(/^[\s•\-–—>·]+/, '').trim(); if (!line) return;
     const m = /^([^:：]{2,30})[:：]\s*(.*)$/.exec(line);
@@ -4284,7 +4284,7 @@ function parseGula(text) {
     const k = gNrm(m[1]), v = m[2].trim(); cur = null;
     if (/^(nombre|cliente|a nombre de|nombre del cliente|recibe|quien recibe)$/.test(k)) set('cliente', v);
     else if (/^(tel|telefono|whatsapp|celular|cel|numero de telefono|numero de celular|contacto)$/.test(k)) set('tel', v);
-    else if (/^(calle)$/.test(k)) set('calle', v);
+    else if (/^(calle|calle y numero|calle y num|calle y no|calle y numero exterior|calle numero|calle con numero)$/.test(k)) set('calle', v);
     else if (/^(numero|num|no|numero exterior|num ext|#|ext|exterior)$/.test(k)) set('num', v);
     else if (/^(interior|int|numero interior|num int)$/.test(k)) set('int', v);
     else if (/^(colonia|col|fraccionamiento|fracc|barrio)$/.test(k)) set('col', v);
@@ -4292,6 +4292,7 @@ function parseGula(text) {
     else if (/^(municipio|mun|delegacion)$/.test(k)) set('mun', v);
     else if (/^(referencia|referencias|ref|entre calles|indicaciones|notas|nota|comentarios)$/.test(k)) set('ref', v);
     else if (/^(direccion|domicilio|direccion de entrega|entregar en|dir)$/.test(k)) set('dir', v);
+    else if (/^(calle\b|domicilio\b|direccion\b)/.test(k)) set('dir', v);
     else if (/^(pedido|orden|productos|producto|detalle|detalle del pedido|platillos|articulos|menu|mi pedido|tu pedido)$/.test(k)) { cur = 'desc'; if (v) items.push(v); }
   });
   if (items.length) out.desc = items.join(', ').replace(/\s+/g, ' ');
