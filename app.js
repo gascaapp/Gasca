@@ -1568,7 +1568,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '27-oct-2026 · 41';
+const APP_V = '27-oct-2026 · 42';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -4293,9 +4293,11 @@ function parseGula(text) {
     else if (/^(referencia|referencias|ref|entre calles|indicaciones|notas|nota|comentarios)$/.test(k)) set('ref', v);
     else if (/^(direccion|domicilio|direccion de entrega|entregar en|dir)$/.test(k)) set('dir', v);
     else if (/^(calle\b|domicilio\b|direccion\b)/.test(k)) set('dir', v);
+    else if (/^(folio|orden|pedido|no de pedido|numero de pedido|no de orden|numero de orden|folio del pedido|folio de pedido|orden no|pedido no)$/.test(k) && /^#?\s*\d{1,8}\s*$/.test(v)) set('folio', v.replace(/\D/g, ''));
     else if (/^(pedido|orden|productos|producto|detalle|detalle del pedido|platillos|articulos|menu|mi pedido|tu pedido)$/.test(k)) { cur = 'desc'; if (v) items.push(v); }
   });
-  if (items.length) out.desc = items.join(', ').replace(/\s+/g, ' ');
+  if (!out.folio) { const fm = /(?:folio|orden|pedido)\s*(?:no\.?|num\.?|numero|n[úu]m)?\s*[#:]?\s*#?\s*(\d{1,8})\b/i.exec(String(text || '').replace(/[*_~`]/g, '')); if (fm) out.folio = fm[1]; }
+  if (items.length) out.items = items.join(', ').replace(/\s+/g, ' ');
   if (out.tel) { const d = String(out.tel).replace(/\D/g, ''); out.tel = d.length > 10 ? d.slice(-10) : d; }
   if (out.dir && !out.calle) {
     const parts = out.dir.split(',').map((x) => x.trim()).filter(Boolean);
@@ -4321,17 +4323,14 @@ function gulaFill() {
   const g = parseGula(t);
   const pp = String(S.addr || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (!g.ciudad && pp.length >= 2) g.ciudad = pp[pp.length - 2]; if (!g.mun && pp.length >= 1) g.mun = pp[pp.length - 1];
-  const map = { 'o-cliente': g.cliente, 'o-tel': g.tel, 'o-calle': g.calle, 'o-num': g.num, 'o-int': g.int, 'o-col': g.col, 'o-ciudad': g.ciudad, 'o-mun': g.mun, 'o-ref': g.ref, 'o-desc': g.desc && g.desc.slice(0, 120) };
+  const map = { 'o-cliente': g.cliente, 'o-tel': g.tel, 'o-calle': g.calle, 'o-num': g.num, 'o-int': g.int, 'o-col': g.col, 'o-ciudad': g.ciudad, 'o-mun': g.mun, 'o-ref': g.ref, 'o-desc': 'Pedido de Gula' + (g.folio ? ' · Orden ' + g.folio : '') };
   const found = Object.keys(map).filter((k) => map[k]);
   if (!g.calle && !g.cliente && !g.tel) { if (r) r.innerHTML = '<b style="color:var(--red)">No encontré datos de entrega.</b> Revisa que pegaste el mensaje completo.'; return; }
   const o = {}; found.forEach((k) => { o[k] = map[k]; }); wzFill(o, found);
   const need = ['o-cliente', 'o-tel', 'o-calle', 'o-num', 'o-col'].filter((k) => !map[k] || (k === 'o-tel' && String(map[k]).length < 10));
   const mdl = document.getElementById('gulaModal'); if (mdl) mdl.remove();
-  const noDesc = !map['o-desc'];
-  const step = noDesc ? 0 : (need.some((k) => k === 'o-cliente' || k === 'o-tel') ? 1 : (need.length ? 2 : 3));
-  let msg = noDesc ? '✅ Datos de entrega listos. Ahora escribe aquí arriba qué se entrega y toca Siguiente.' : (need.length ? '✅ Llené lo que encontré. Completa lo que falte y toca Siguiente.' : '✅ Datos listos. Escribe cuánto se cobra y el pago al repartidor, y toca Siguiente.');
-  if (noDesc && need.length) msg = '✅ Llené lo que encontré. Escribe qué se entrega, completa lo que falte y toca Siguiente.';
+  const step = need.some((k) => k === 'o-cliente' || k === 'o-tel') ? 1 : (need.length ? 2 : 3);
+  const msg = need.length ? 'Llené lo que encontré. Completa lo que falte y toca Siguiente.' : 'Datos listos. Escribe cuánto se cobra y el pago al repartidor, y toca Siguiente.';
   if (!wzOff()) wzGo(step);
-  toast(msg.replace('✅ ', ''));
-  setTimeout(() => { try { const bx = document.getElementById('wzGula'); if (!bx) return; let n = document.getElementById('gulaOk'); if (!n) { n = document.createElement('div'); n.id = 'gulaOk'; n.style.cssText = 'margin-top:10px;padding:10px 12px;border-radius:12px;background:#e6f6ea;color:#14532d;font-weight:700;font-size:15px'; bx.appendChild(n); } n.textContent = msg; if (noDesc) { const d = document.getElementById('o-desc'); if (d) d.focus(); } } catch (e) {} }, 60);
+  toast(msg);
 }
