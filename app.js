@@ -1568,7 +1568,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '23-oct-2026 · 38';
+const APP_V = '23-oct-2026 · 39';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -3529,7 +3529,8 @@ function delivNotice(o) {
   const st = document.createElement('style');
   st.textContent = '#lnBox{display:none}.ln-on #lnBox{display:block}.ln-on #authTitle,.ln-on #authLede,.ln-on #authForm,.ln-on #authLinks,.ln-on #installHint,.ln-on #wcBack,.ln-on #wcBox{display:none!important}body.ln-body .top{display:none}body.ln-body,body:has(#viewAuth.wc-on){background:#f2f4f7!important;color:#16202a}body:has(#viewAuth.wc-on) .top{background:#f2f4f7!important;border-color:transparent!important}body:has(#viewAuth.wc-on) .brandname{color:#16202a!important}body:has(#viewAuth.wc-on) .tagline{color:#5b6672!important}' +
     '#lnBox{padding:22px 0 30px;animation:wcin .4s ease both}.ln-logo{text-align:center;margin:8px 0 26px;user-select:none;-webkit-user-select:none}.ln-mark{width:92px;height:92px;margin:0 auto;border-radius:28px;background:#f6b400;display:grid;place-items:center;color:#16202a;box-shadow:0 8px 22px rgba(246,180,0,.4)}.ln-mark svg{width:56px;height:56px}.ln-name{margin-top:10px;font-family:"Barlow Condensed",system-ui,sans-serif;font-weight:700;font-size:20px;letter-spacing:4px;text-transform:uppercase;color:#16202a}' +
-    '.ln-title{font-size:34px;font-weight:800;color:#0d141b;margin:0 0 18px;font-family:"Barlow Condensed",system-ui,sans-serif}' +
+    '.ln-title{font-size:34px;font-weight:800;color:#0d141b;margin:0 0 14px;font-family:"Barlow Condensed",system-ui,sans-serif}' +
+    '.ln-seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:#e3e7ec;border-radius:16px;padding:4px;margin:0 0 16px}.ln-seg button{border:0;background:none;font:inherit;font-size:16.5px;font-weight:700;color:#4a5766;min-height:46px;border-radius:12px;cursor:pointer}.ln-seg button.on{background:#fff;color:#16202a;box-shadow:0 2px 8px rgba(20,30,45,.15)}' +
     '.ln-field{position:relative;display:flex;align-items:center;background:#fff;border:2px solid var(--line,#d5dbe3);border-radius:16px;min-height:58px;margin-bottom:14px}.ln-field:focus-within{border-color:#16202a}.ln-field input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:18px;padding:14px 12px;color:#16202a;outline:none}.ln-field input::placeholder{color:#c3c9d1}' +
     '.ln-cc{flex:none;display:flex;align-items:center;gap:6px;border:0;background:none;font:inherit;font-size:17px;font-weight:700;padding:0 4px 0 14px;height:54px;color:#16202a;border-right:2px solid var(--line,#e3e7ec)}.ln-cc i{font-style:normal;font-size:12px;opacity:.6}' +
     '.ln-lock{flex:none;margin-left:14px;color:#c3c9d1;display:grid}.ln-lock svg{width:22px;height:22px}.ln-field .pw-eye{position:static;transform:none;margin-right:4px;flex:none}' +
@@ -3544,6 +3545,7 @@ function delivNotice(o) {
   const OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.9 10.9 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94"/><path d="M9.9 4.24A10.9 10.9 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
   box.innerHTML = '<div class="ln-logo" id="lnLogo"><div class="ln-mark">' + MARK + '</div><div class="ln-name">Gasca</div></div>' +
     '<h1 class="ln-title">Iniciar sesión</h1>' +
+    '<div class="ln-seg" role="tablist" aria-label="Cómo quieres entrar"><button type="button" role="tab" class="on" id="lnSegTel" aria-selected="true">📱 Teléfono</button><button type="button" role="tab" id="lnSegMail" aria-selected="false">✉️ Correo</button></div>' +
     '<form id="lnForm" novalidate>' +
     '<div class="ln-field" id="lnTelRow"><button type="button" class="ln-cc" id="lnCc"><span id="lnFlag"></span><span id="lnDial"></span><i>▼</i></button><input id="ln-tel" name="username" type="tel" inputmode="numeric" autocomplete="username" maxlength="16" placeholder="Número de teléfono"></div>' +
     '<div class="ln-field" id="lnMailRow" hidden><input id="ln-mail" name="username" type="email" autocomplete="username" maxlength="80" placeholder="Correo electrónico" style="padding-left:16px"></div>' +
@@ -3551,8 +3553,7 @@ function delivNotice(o) {
     '<p class="warn" id="lnErr" role="alert" hidden></p>' +
     '<div class="ln-row"><label class="ln-rem"><input type="checkbox" id="ln-rem" checked> Recordarme</label><button type="button" class="ln-link" id="lnForgot">¿Olvidaste tu contraseña?</button></div>' +
     '<button class="btn primary block" type="submit" id="lnGo">Iniciar sesión</button></form>' +
-    '<p class="ln-reg">¿Aún no tienes cuenta? <button type="button" class="ln-link u" id="lnReg">Registrarme</button></p>' +
-    '<button type="button" class="ln-alt" id="lnAlt">Entrar con correo</button>';
+    '<p class="ln-reg">¿Aún no tienes cuenta? <button type="button" class="ln-link u" id="lnReg">Registrarme</button></p>';
   document.getElementById('authTitle').before(box);
   const $l = (id) => document.getElementById(id);
   function paintCc() { $l('lnFlag').textContent = flag(cc.iso); $l('lnDial').textContent = '+' + cc.dial; }
@@ -3568,7 +3569,9 @@ function delivNotice(o) {
     sh.addEventListener('click', (e) => { const it = e.target.closest('.it'); if (it) { cc = COUNTRIES.find((c) => c.iso === it.getAttribute('data-iso')) || cc; paintCc(); sh.remove(); } else if (e.target === sh || e.target.id === 'lnCcX') sh.remove(); });
     setTimeout(() => { try { $l('lnCcQ').focus(); } catch (e) {} }, 50);
   });
-  $l('lnAlt').addEventListener('click', () => { mailMode = !mailMode; $l('lnTelRow').hidden = mailMode; $l('lnMailRow').hidden = !mailMode; $l('lnAlt').textContent = mailMode ? 'Entrar con teléfono' : 'Entrar con correo'; S.authErr = ''; });
+  const setSeg = (mail) => { mailMode = mail; $l('lnTelRow').hidden = mail; $l('lnMailRow').hidden = !mail; $l('lnSegTel').classList.toggle('on', !mail); $l('lnSegMail').classList.toggle('on', mail); $l('lnSegTel').setAttribute('aria-selected', String(!mail)); $l('lnSegMail').setAttribute('aria-selected', String(mail)); S.authErr = ''; };
+  $l('lnSegTel').addEventListener('click', () => setSeg(false));
+  $l('lnSegMail').addEventListener('click', () => setSeg(true));
   $l('lnReg').addEventListener('click', () => { LN.on = false; WC.on = true; S.authErr = ''; setMode('login'); try { window.scrollTo(0, 0); } catch (e) {} });
   const ident = () => mailMode ? $l('ln-mail').value.trim().toLowerCase() : $l('ln-tel').value.replace(/\D/g, '').slice(-10);
   $l('lnForgot').addEventListener('click', () => { const id = ident(); $('#a-email').value = id; if (!mailMode && id.length < 10) { S.authErr = 'Escribe tu teléfono arriba y vuelve a tocar "¿Olvidaste tu contraseña?".'; return; } resetPass(); });
