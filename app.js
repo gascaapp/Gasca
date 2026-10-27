@@ -1568,7 +1568,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '27-oct-2026 · 40';
+const APP_V = '27-oct-2026 · 41';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -4311,7 +4311,7 @@ function gulaOpen() {
   if (document.getElementById('gulaModal')) return;
   if (!document.getElementById('gulaCss')) { const st = document.createElement('style'); st.id = 'gulaCss'; st.textContent = '#gulaModal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;z-index:9999;padding:12px}#gulaModal .box{background:var(--surface);color:var(--ink);border-radius:16px;padding:18px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto}#gulaModal h3{margin:0 0 8px}#gulaModal textarea{width:100%;box-sizing:border-box;min-height:150px;margin:8px 0;padding:10px;border:2px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font-size:16px}#gulaModal .gm-res{font-size:14px;line-height:1.5;margin:6px 0 10px}#gulaModal .btn{margin-top:6px}'; document.head.appendChild(st); }
   const m = document.createElement('div'); m.id = 'gulaModal';
-  m.innerHTML = '<div class="box"><h3>📋 Pegar pedido de Gula</h3><p>Copia el mensaje de WhatsApp que te llegó y pégalo aquí. Gasca toma solo los datos de entrega.</p><textarea id="gulaTxt" placeholder="Pega aquí el pedido"></textarea><div class="gm-res" id="gulaRes"></div><button class="btn primary block" type="button" data-act="gula-fill">Llenar mi pedido</button><button class="btn ghost block" type="button" data-act="gula-close">Cancelar</button></div>';
+  m.innerHTML = '<div class="box"><h3>📋 Pegar pedido de Gula</h3><p>Copia el mensaje de WhatsApp que te llegó y pégalo aquí. Gasca toma solo los datos de entrega.</p><textarea id="gulaTxt" placeholder="Pega aquí el pedido"></textarea><div class="gm-res" id="gulaRes"></div><button class="btn primary block" type="button" data-act="gula-fill">Siguiente</button><button class="btn ghost block" type="button" data-act="gula-close">Cancelar</button></div>';
   document.body.appendChild(m);
   m.addEventListener('click', (e) => { if (e.target === m) m.remove(); });
   try { document.getElementById('gulaTxt').focus(); } catch (e) {}
@@ -4325,8 +4325,13 @@ function gulaFill() {
   const found = Object.keys(map).filter((k) => map[k]);
   if (!g.calle && !g.cliente && !g.tel) { if (r) r.innerHTML = '<b style="color:var(--red)">No encontré datos de entrega.</b> Revisa que pegaste el mensaje completo.'; return; }
   const o = {}; found.forEach((k) => { o[k] = map[k]; }); wzFill(o, found);
-  const need = ['o-desc', 'o-cliente', 'o-tel', 'o-calle', 'o-num', 'o-col'].filter((k) => !map[k] || (k === 'o-tel' && String(map[k]).length < 10));
+  const need = ['o-cliente', 'o-tel', 'o-calle', 'o-num', 'o-col'].filter((k) => !map[k] || (k === 'o-tel' && String(map[k]).length < 10));
   const mdl = document.getElementById('gulaModal'); if (mdl) mdl.remove();
-  if (need.length) { toast('Llené lo que encontré. Revisa y completa lo que falte.'); if (!wzOff()) wzGo(0); }
-  else { toast('Listo. Revisa los datos y escribe cuánto se cobra y el pago al repartidor.'); if (!wzOff()) wzGo(3); }
+  const noDesc = !map['o-desc'];
+  const step = noDesc ? 0 : (need.some((k) => k === 'o-cliente' || k === 'o-tel') ? 1 : (need.length ? 2 : 3));
+  let msg = noDesc ? '✅ Datos de entrega listos. Ahora escribe aquí arriba qué se entrega y toca Siguiente.' : (need.length ? '✅ Llené lo que encontré. Completa lo que falte y toca Siguiente.' : '✅ Datos listos. Escribe cuánto se cobra y el pago al repartidor, y toca Siguiente.');
+  if (noDesc && need.length) msg = '✅ Llené lo que encontré. Escribe qué se entrega, completa lo que falte y toca Siguiente.';
+  if (!wzOff()) wzGo(step);
+  toast(msg.replace('✅ ', ''));
+  setTimeout(() => { try { const bx = document.getElementById('wzGula'); if (!bx) return; let n = document.getElementById('gulaOk'); if (!n) { n = document.createElement('div'); n.id = 'gulaOk'; n.style.cssText = 'margin-top:10px;padding:10px 12px;border-radius:12px;background:#e6f6ea;color:#14532d;font-weight:700;font-size:15px'; bx.appendChild(n); } n.textContent = msg; if (noDesc) { const d = document.getElementById('o-desc'); if (d) d.focus(); } } catch (e) {} }, 60);
 }
