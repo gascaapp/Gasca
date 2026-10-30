@@ -4,7 +4,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/fireba
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword,
   signOut, sendEmailVerification, sendPasswordResetEmail, verifyBeforeUpdateEmail, reload, setPersistence, browserLocalPersistence, browserSessionPersistence,
-  updatePassword, reauthenticateWithCredential, EmailAuthProvider
+  updatePassword, reauthenticateWithCredential, EmailAuthProvider, updateProfile
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {
   initializeFirestore, doc, getDoc, getDocs, setDoc, updateDoc, collection, query, where,
@@ -424,7 +424,7 @@ async function doSignOut() {
 function bootstrap(u) {
   stopAll(); resetData();
   S.user = u || null; S.ready = true;
-  if (!u) { S.uid = null; S.email = ''; S.ownerEmail = false; S.isAdmin = false; $('#a-pass').value = ''; { const p2 = document.getElementById('a-pass2'); if (p2) p2.value = ''; } setMode('login'); render(); return; }
+  if (!u) { sessClear(); S.uid = null; S.email = ''; S.ownerEmail = false; S.isAdmin = false; $('#a-pass').value = ''; { const p2 = document.getElementById('a-pass2'); if (p2) p2.value = ''; } setMode('login'); render(); return; }
   S.uid = u.uid; S.email = (u.email || '').toLowerCase(); S.soporteLink = false;
   S.ownerEmail = OWNER_OK && S.email === OWNER;
   S.isAdmin = S.ownerEmail && u.emailVerified === true;
@@ -454,7 +454,41 @@ function staffDeny(msg) {
 }
 onAuthStateChanged(auth, (u) => bootstrap(u));
 
+
+/* ---------- una sola sesión por cuenta ----------
+   Al entrar en un teléfono, ese teléfono queda como el activo. Si la misma cuenta entra en otro, el anterior se cierra solo. */
+const sessKey = () => 'gasca_sess_' + S.uid;
+function sessClear() { try { Object.keys(localStorage).forEach((k) => { if (k.indexOf('gasca_sess_') === 0) localStorage.removeItem(k); }); } catch (e) {} }
+function sessStart() {
+  try {
+    if (!S.user || S.isAdmin || S.isAgent || S.isPartner || S.ownerEmail) return;
+    if (localStorage.getItem(sessKey())) return;
+    const t = 'S' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+    localStorage.setItem(sessKey(), t); S.sessAt = Date.now();
+    updateProfile(S.user, { displayName: t }).catch(() => {});
+  } catch (e) {}
+}
+async function sessCheck() {
+  try {
+    if (!S.uid || !S.user || S.isAdmin || S.isAgent || S.isPartner || S.ownerEmail) return;
+    const mine = localStorage.getItem(sessKey()); if (!mine) return;
+    if (S.sessAt && Date.now() - S.sessAt < 6000) return;
+    const uid = S.uid; await reload(S.user);
+    if (S.uid !== uid || !S.user) return;
+    const dn = S.user.displayName || '';
+    if (dn && dn !== mine) sessKick();
+  } catch (e) {}
+}
+function sessKick() {
+  const msg = 'Tu cuenta se abrió en otro teléfono. Aquí se cerró la sesión. Solo se puede usar un teléfono por cuenta.';
+  stopAll(); resetData(); sessClear();
+  signOut(auth).catch(() => {});
+  setTimeout(() => { try { toast(msg); const e = document.getElementById('lnErr'); if (e) { e.textContent = msg; e.hidden = false; } } catch (er) {} }, 500);
+}
+setInterval(() => { if (document.visibilityState === 'visible') sessCheck(); }, 20000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sessCheck(); });
 function startPerson() {
+  sessStart();
   listen(unsubs, doc(db, 'users', S.uid), (s) => {
     S.profile = s.exists() ? s.data() : null; S.profileReady = true;
     if (S.profile) { S.role = S.profile.role; S.name = S.profile.name || ''; S.addr = isCli(S.profile) ? '' : (S.profile.addr || ''); if (!S.tab) S.tab = S.role === 'rider' ? 'disp' : 'nuevo'; }
@@ -1568,7 +1602,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '27-oct-2026 · 42';
+const APP_V = '30-oct-2026 · 43';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
