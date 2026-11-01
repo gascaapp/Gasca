@@ -1602,7 +1602,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '30-oct-2026 · 43';
+const APP_V = '30-oct-2026 · 44';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -1610,7 +1610,7 @@ function renderPerfil(el) {
   const av = '<div class="pf-card"><label class="pf-pic" aria-label="Cambiar mi foto">' + (S.myThumb ? '<img alt="Mi foto" src="' + S.myThumb + '">' : '<span class="pf-ph"><svg viewBox="0 0 24 24" width="44" height="44" fill="#9aa3ad"><circle cx="12" cy="8" r="4.2"/><path d="M3.5 21c0-4.6 3.8-7.5 8.5-7.5s8.5 2.9 8.5 7.5z"/></svg></span>') + '<span class="pf-cam"><svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="M9 4 7.6 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2.6L15 4zm3 4.5A4.5 4.5 0 1 1 12 17.5a4.5 4.5 0 0 1 0-9z"/></svg></span><input class="sr" type="file" accept="image/*" capture="user" data-pfoto="1"></label>' +
     '<div class="pf-nm">' + esc(S.name || 'Repartidor') + '</div>' + (rno ? '<div class="pf-no"><small>Número de repartidor</small><b>' + esc(rno) + '</b></div>' : '') +
     (S.myThumb ? '' : '<div class="pf-hint">Toca el círculo para subir tu selfie</div>') + '</div>';
-  const h = av + pfRow('pf-dark', 'moon', 'Modo oscuro', isDarkNow() ? 'on' : 'off') + pfRow('pf-notif', 'bell', 'Notificaciones', notifOn() ? 'on' : 'off') +
+  const h = av + pfRow('pf-notif', 'bell', 'Notificaciones', notifOn() ? 'on' : 'off') +
     pfRow('pf-pass', 'lock', 'Cambiar contraseña') + (recEligible() ? pfRow('pf-rec', 'mail', 'Correo de recuperación') : '') + pfRow('pf-terms', 'list', 'Términos y condiciones') + pfRow('pf-priv', 'shield', 'Política de privacidad') +
     (opts ? pfRow('pf-switch', 'swap', 'Cambiar de perfil') : '') + '<button type="button" class="pf-row" data-act="signout" id="pfOut"><span class="pf-i">' + PI.out + '</span><span class="pf-l">Cerrar sesión</span></button><p class="pf-ver">Versión ' + APP_V + '</p>';
   if (el.dataset.h !== h) { el.innerHTML = h; el.dataset.h = h; }
@@ -4368,3 +4368,45 @@ function gulaFill() {
   if (!wzOff()) wzGo(step);
   toast(msg);
 }
+
+/* ---------- botón día / noche, siempre arriba a la derecha ---------- */
+(function () {
+  const st = document.createElement('style');
+  st.textContent = '#themeBtn{position:absolute;top:8px;right:12px;z-index:60;display:flex;align-items:center;gap:5px;height:34px;padding:0 11px;border-radius:17px;font:inherit;font-size:14px;font-weight:800;cursor:pointer;border:2px solid #cfd6de;background:#fff;color:#16202a;box-shadow:0 2px 6px rgba(20,30,45,.15);-webkit-tap-highlight-color:transparent}#themeBtn:active{transform:scale(.95)}#themeBtn .ti{font-size:17px;line-height:1}#themeBtn.dk{background:#1f2a36;color:#ffd24d;border-color:#46566a;box-shadow:none}';
+  document.head.appendChild(st);
+  const b = document.createElement('button'); b.type = 'button'; b.id = 'themeBtn'; b.setAttribute('data-act', 'pf-dark');
+  document.body.appendChild(b);
+  function paint() { const d = isDarkNow(); b.className = d ? 'dk' : ''; b.innerHTML = '<span class="ti">' + (d ? '☀️' : '🌙') + '</span>' + (d ? 'Día' : 'Noche'); b.setAttribute('aria-label', d ? 'Cambiar a modo día' : 'Cambiar a modo noche'); }
+  paint();
+  try { new MutationObserver(paint).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) {}
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paint); } catch (e) {}
+})();
+
+/* pantallas de entrar y de bienvenida en modo noche */
+(function () {
+  const R = [
+    ['body.ln-body,body:has(#viewAuth.wc-on)', 'background:#0d141b!important;color:#eaf0f5'],
+    ['body:has(#viewAuth.wc-on) .top', 'background:#0d141b!important'],
+    ['body:has(#viewAuth.wc-on) .brandname', 'color:#eaf0f5!important'],
+    ['body:has(#viewAuth.wc-on) .tagline', 'color:#93a3b3!important'],
+    ['.ln-name,.ln-title,.ln-rem,.ln-link,.ln-reg,.ln-cc,.wc-q', 'color:#eaf0f5'],
+    ['.ln-alt', 'color:#93a3b3'],
+    ['.ln-seg', 'background:#1f2b37'],
+    ['.ln-seg button', 'color:#93a3b3'],
+    ['.ln-seg button.on', 'background:#16202a;color:#eaf0f5;box-shadow:none'],
+    ['.ln-field', 'background:#16202a;border-color:#2b3a47'],
+    ['.ln-field:focus-within', 'border-color:#ffc21a'],
+    ['.ln-field input', 'color:#eaf0f5'],
+    ['.ln-field input::placeholder', 'color:#5f7081'],
+    ['.ln-cc', 'border-right-color:#2b3a47'],
+    ['.ln-lock', 'color:#5f7081'],
+    ['.ln-rem input', 'accent-color:#ffc21a'],
+    ['.wc-card', 'background:#16202a;color:#eaf0f5;border-color:#2b3a47;box-shadow:none'],
+    ['#wcBack', 'background:#16202a!important;color:#eaf0f5!important;border-color:#2b3a47!important'],
+    ['.wc-login', 'background:#ffc21a!important;color:#16202a!important']
+  ];
+  const mk = (pre) => R.map((r) => r[0].split(',').map((x) => pre + ' ' + x.trim()).join(',') + '{' + r[1] + '}').join('');
+  const st = document.createElement('style');
+  st.textContent = mk(':root[data-theme="dark"]') + '@media (prefers-color-scheme: dark){' + mk(':root:not([data-theme="light"])') + '}';
+  document.head.appendChild(st);
+})();
