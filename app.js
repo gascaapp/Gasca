@@ -1622,7 +1622,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '2-nov-2026 · 46';
+const APP_V = '2-nov-2026 · 47';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -1919,12 +1919,17 @@ async function setBaja(id, baja) {
 function renderAltas() {
   const el = $('#adminAltas');
   if (document.activeElement && /^(a-motivo|cp-motivo)/.test(document.activeElement.id || '')) return;
-  const all = S.users.map((u) => ({ u, st: personStatus(u, S.aprobs[u.id]) }));
+  const catOf = (u) => (u && u.role === 'rider' ? 'rep' : isCli(u) ? 'env' : 'res');
+  const cat = S.altaCat || 'rep';
+  const everyone = S.users.map((u) => ({ u, st: personStatus(u, S.aprobs[u.id]) }));
+  const CATS = [['rep', '🛵', 'Repartidores'], ['res', '🏪', 'Restaurantes'], ['env', '📦', 'Envíos personales']];
+  const seg = '<div class="al-seg">' + CATS.map((c) => { const n = everyone.filter((x) => catOf(x.u) === c[0] && x.st === 'revision').length + (S.cambios || []).filter((cc) => cc.estado === 'pendiente' && catOf(S.users.find((u) => u.id === cc.uid)) === c[0]).length; return '<button type="button" data-act="alta-cat" data-cat="' + c[0] + '" class="' + (cat === c[0] ? 'on' : '') + '"><span>' + c[1] + '</span><b>' + c[2] + '</b>' + (n ? '<i>' + n + '</i>' : '') + '</button>'; }).join('') + '</div>';
+  const all = everyone.filter((x) => catOf(x.u) === cat);
   const rev = all.filter((x) => x.st === 'revision').sort((a, b) => (a.u.docsEn || 0) - (b.u.docsEn || 0));
   const apr = all.filter((x) => x.st === 'aprobado');
   const oth = all.filter((x) => x.st === 'incompleto' || x.st === 'rechazado');
-  const cps = (S.cambios || []).filter((c) => c.estado === 'pendiente').sort((a, b) => (a.creadoEn || 0) - (b.creadoEn || 0));
-  let h = '<h2 class="section">Altas</h2>' + (cps.length ? '<div class="subhead">Cambios de perfil por aprobar (' + cps.length + ')</div>' + cps.map(cambioCard).join('') : '') + '<div class="subhead">Por revisar (' + rev.length + ')</div>';
+  const cps = (S.cambios || []).filter((c) => c.estado === 'pendiente' && catOf(S.users.find((u) => u.id === c.uid)) === cat).sort((a, b) => (a.creadoEn || 0) - (b.creadoEn || 0));
+  let h = '<h2 class="section">Altas</h2>' + seg + (cps.length ? '<div class="subhead">Cambios de perfil por aprobar (' + cps.length + ')</div>' + cps.map(cambioCard).join('') : '') + '<div class="subhead">Por revisar (' + rev.length + ')</div>';
   h += rev.length ? rev.map((x) => altaCard(x.u)).join('') : '<p class="hint">Nadie está esperando aprobación.</p>';
   h += '<div class="subhead">Aprobados (' + apr.length + ')</div>';
   h += apr.length ? apr.map((x) => {
@@ -2242,6 +2247,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'issue') askIssue(id);
   else if (act === 'noans') askNoAns(id);
   else if (act === 'libcode') askLib(id);
+  else if (act === 'alta-cat') { S.altaCat = b.getAttribute('data-cat') || 'rep'; render(); }
   else if (act === 'gula-open') gulaOpen();
   else if (act === 'gula-fill') gulaFill();
   else if (act === 'gula-close') { const m = document.getElementById('gulaModal'); if (m) m.remove(); }
@@ -4491,3 +4497,6 @@ function gulaFill() {
     catch (er) { toast('No se pudo guardar. Intenta de nuevo.'); ed.dataset.h = ''; }
   });
 })();
+
+/* ---------- Altas separadas: repartidores, restaurantes y envíos personales ---------- */
+(() => { const st = document.createElement('style'); st.textContent = '.al-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:6px 0 14px}.al-seg button{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;border:2px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer;min-height:70px;-webkit-tap-highlight-color:transparent}.al-seg button span{font-size:22px;line-height:1}.al-seg button b{font-size:13px;line-height:1.15;text-align:center}.al-seg button.on{border-color:#f6b400;box-shadow:0 0 0 3px rgba(246,180,0,.35)}.al-seg button i{position:absolute;top:-7px;right:-4px;min-width:22px;height:22px;border-radius:11px;background:#e11d48;color:#fff;font-style:normal;font-weight:800;font-size:13px;display:grid;place-items:center;padding:0 5px}'; document.head.appendChild(st); })();
