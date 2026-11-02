@@ -20,11 +20,13 @@ const folio = (id) => '#' + String(id).slice(-4).toUpperCase();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LABEL = { abierto: 'Buscando moto', asignado: 'Asignado', recogido: 'En camino', entregado: 'Entregado', cancelado: 'Cancelado' };
 const FRESH_MS = 150000; // una persona cuenta como conectada si avisó hace menos de 2.5 min
-const COM_C = 13; // la comisión es el 13%: 13 centavos por cada peso del envío
+const COM_C = 13; // comisión normal: 13% (13 centavos por cada peso del envío). El dueño puede cambiarla en Ajustes.
 
 const OWNER = String(OWNER_EMAIL || '').trim().toLowerCase();
 const OWNER_OK = OWNER.indexOf('@') > 0;
-const comC = (o) => (Number(o.tarifa) || 0) * COM_C; // comisión en centavos
+const comCfg = () => { const c = (typeof S !== 'undefined' && S.com) || {}; const pct = Number(c.pct), fijo = Number(c.fijo); return { modo: c.modo === 'fijo' ? 'fijo' : 'pct', pct: (c.pct !== undefined && c.pct !== '' && isFinite(pct) && pct >= 0) ? pct : COM_C, fijo: (c.fijo !== undefined && c.fijo !== '' && isFinite(fijo) && fijo >= 0) ? fijo : 0 }; };
+const comC = (o) => { const t = Number(o.tarifa) || 0, c = comCfg(); const v = c.modo === 'fijo' ? Math.round(c.fijo * 100) : Math.round(t * c.pct); return Math.max(0, Math.min(v, Math.round(t * 100))); }; // comisión en centavos (nunca más que el envío)
+const comTxt = () => { const c = comCfg(); return c.modo === 'fijo' ? 'descuenta $' + c.fijo.toFixed(2) + ' por cada envío entregado' : 'descuenta el ' + String(+c.pct.toFixed(2)) + '% de su pago'; };
 
 const app = initializeApp(FIREBASE_CONFIG);
 const auth = getAuth(app);
@@ -564,6 +566,7 @@ function startRole() {
     listen(roleUnsubs, doc(db, 'config', 'pago'), (s) => { S.pago = (s.exists() && s.data().texto) || ''; render(); });
     listen(roleUnsubs, doc(db, 'config', 'zonas'), (s) => { S.zonas = (s.exists() && Array.isArray(s.data().zonas)) ? s.data().zonas : []; S.radioKm = (s.exists() && Number(s.data().radioKm)) || 3; mergeOrders(); syncSheet(); render(); });
     listen(roleUnsubs, doc(db, 'config', 'tarifas'), (s) => { S.tarifas = s.exists() ? s.data() : null; });
+    listen(roleUnsubs, doc(db, 'config', 'comision'), (s) => { S.com = s.exists() ? s.data() : null; render(); });
     roleUnsubs.push(onSnapshot(doc(db, 'fotosrep', S.uid), (sn) => { S.myThumb = sn.exists() ? (sn.data().img || '') : ''; render(); }, () => {}));
     listen(roleUnsubs, query(collection(db, 'ofertas'), where('driverId', '==', S.uid)), onOfertas);
     roleUnsubs.push(onSnapshot(query(collection(db, 'retiros'), where('driverId', '==', S.uid)), (snap) => { const m = Object.assign({}, S.retiros || {}); snap.docs.forEach((d) => { const v = d.data(); if (v && v.codigo) m[d.id] = v.codigo; }); S.retiros = m; S.retReady = true; render(); }, () => { S.retFail = true; render(); }));
@@ -695,7 +698,7 @@ async function counter(id, m) {
   if (!canAct() || view() !== 'rider' || !o || o.estado !== 'abierto' || S.busy.has('of' + id)) return;
   if (!S.online) { toast('Conéctate para ofertar.'); return; }
   if (riderBlocked()) { toast(riderWaiting() ? 'Estás esperando a un cliente. Termina esa espera para tomar más pedidos.' : 'Ya llevas ' + MAX_ACT + ' pedidos. Entrega alguno para tomar más.'); return; }
-  if (saldoC() < m * COM_C) { toast('Tu saldo no alcanza para esa oferta. Recarga.'); S.tab = 'saldo'; render(); return; }
+  if (saldoC() < comC({ tarifa: m })) { toast('Tu saldo no alcanza para esa oferta. Recarga.'); S.tab = 'saldo'; render(); return; }
   S.busy.add('of' + id); render();
   try {
     await setDoc(doc(db, 'ofertas', id + '_' + S.uid), { id: id + '_' + S.uid, orderId: id, shopId: o.shopId, driverId: S.uid, driverName: S.name || 'Repartidor', monto: m, estado: 'pendiente', creadoEn: Date.now() });
@@ -787,6 +790,7 @@ function startAdmin() {
   listen(unsubs, doc(db, 'config', 'pago'), (s) => { S.pago = (s.exists() && s.data().texto) || ''; render(); });
   listen(unsubs, doc(db, 'config', 'zonas'), (s) => { S.zonas = (s.exists() && Array.isArray(s.data().zonas)) ? s.data().zonas : []; S.radioKm = (s.exists() && Number(s.data().radioKm)) || 3; render(); });
   listen(unsubs, doc(db, 'config', 'tarifas'), (s) => { S.tarifas = s.exists() ? s.data() : null; });
+  listen(unsubs, doc(db, 'config', 'comision'), (s) => { S.com = s.exists() ? s.data() : null; render(); });
   if (!S.isAgent) listen(unsubs, doc(db, 'config', 'pruebas'), (s) => { S.pruebas = (s.exists() && s.data().ids) || {}; render(); });
   listen(unsubs, query(collection(db, 'incidencias'), orderBy('creadoEn', 'desc'), limit(200)), (snap) => {
     const arr = snap.docs.map((d) => d.data()).filter((x) => x && x.id && x.tipo);
@@ -996,7 +1000,7 @@ async function delivered(id, codigoIn) {
       const d = os.exists() ? os.data() : null;
       if (!d || d.estado !== 'recogido' || d.driverId !== S.uid) throw new Error('state');
       if (!ws.exists()) throw new Error('nowallet');
-      const com = (Number(d.tarifa) || 0) * COM_C, now = Date.now();
+      const com = comC(d), now = Date.now();
       tx.update(oref, { estado: 'entregado', entregadoEn: now, codigoIn });
       tx.update(wref, { saldoC: (Number(ws.data().saldoC) || 0) - com, lastOrder: id });
       tx.set(doc(db, 'movs', 'cm_' + id), { driverId: S.uid, tipo: 'comision', montoC: -com, orderId: id, creadoEn: now });
@@ -1602,7 +1606,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '30-oct-2026 · 44';
+const APP_V = '1-nov-2026 · 45';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -1742,7 +1746,7 @@ function renderWallet() {
   $('#rechargeForm').hidden = !S.rechargeOpen;
   $('#walletTop').innerHTML =
     '<div class="wallet"><div class="line"><span class="k">Saldo disponible</span><span class="saldo">' + (S.walletReady ? cents(saldoC()) : '…') + '</span></div>' +
-    '<p class="hint">Cada envío entregado descuenta el 13% de su pago. Sin saldo suficiente no puedes aceptar pedidos nuevos.</p>' +
+    '<p class="hint">Cada envío entregado ' + comTxt() + '. Sin saldo suficiente no puedes aceptar pedidos nuevos.</p>' +
     '<button class="btn primary block" type="button" data-act="recharge-toggle">' + (S.rechargeOpen ? 'Cerrar' : 'Recargar saldo') + '</button></div>';
   const reqs = S.recargas.filter((r) => r.estado !== 'confirmada').sort((a, b) => b.creadoEn - a.creadoEn).slice(0, 5);
   let h = reqs.map((r) => {
@@ -2765,7 +2769,7 @@ async function libDeliver(id, code) {
       const os = await tx.get(oref), ws = await tx.get(wref);
       const d = os.exists() ? os.data() : null;
       if (!d || d.estado !== 'recogido' || d.driverId !== S.uid || !ws.exists()) throw new Error('state');
-      const com = (Number(d.tarifa) || 0) * COM_C, now = Date.now();
+      const com = comC(d), now = Date.now();
       tx.update(oref, { estado: 'entregado', entregadoEn: now, codigoIn: code, liberado: true });
       tx.update(wref, { saldoC: (Number(ws.data().saldoC) || 0) - com, lastOrder: id });
       tx.set(doc(db, 'movs', 'cm_' + id), { driverId: S.uid, tipo: 'comision', montoC: -com, orderId: id, creadoEn: now });
@@ -2974,7 +2978,7 @@ const incReopen = (id, oid) => incAct(id, async () => {
 }, 'Pedido liberado para otro repartidor.');
 const incRelease = (id, oid) => incAct(id, async () => {
   const o = byId(oid); if (!o || o.estado !== 'recogido' || !o.driverId) throw new Error('state');
-  const com = (Number(o.tarifa) || 0) * COM_C, now = Date.now(), b = writeBatch(db);
+  const com = comC(o), now = Date.now(), b = writeBatch(db);
   b.update(doc(db, 'orders', oid), { estado: 'entregado', entregadoEn: now, liberado: true, liberadoMotivo: 'nadie contesto', liberadoPor: byMe().atendidaPor });
   b.update(doc(db, 'wallets', o.driverId), { saldoC: increment(-com) });
   b.set(doc(db, 'movs', 'cm_' + oid), { driverId: o.driverId, tipo: 'comision', montoC: -com, orderId: oid, creadoEn: now });
@@ -4409,4 +4413,41 @@ function gulaFill() {
   const st = document.createElement('style');
   st.textContent = mk(':root[data-theme="dark"]') + '@media (prefers-color-scheme: dark){' + mk(':root:not([data-theme="light"])') + '}';
   document.head.appendChild(st);
+})();
+
+/* ---------- comisión variable (la cambia el dueño en Ajustes) ---------- */
+(function () {
+  const z = document.getElementById('zonasEd'); if (!z) return;
+  const ed = document.createElement('div'); ed.id = 'comEd'; ed.className = 'stack'; ed.hidden = true; z.before(ed);
+  let d = null, dirty = false, lastSrc = '';
+  const src = () => JSON.stringify(S.com || null);
+  const nowTxt = () => { const c = comCfg(); return c.modo === 'fijo' ? 'Ahora se cobra $' + c.fijo.toFixed(2) + ' fijos por cada pedido entregado.' : 'Ahora se cobra el ' + String(+c.pct.toFixed(2)) + '% del envío.'; };
+  function html() {
+    return '<h2 class="section">Comisión de Gasca</h2><p class="hint">Es lo que se le descuenta al repartidor por cada pedido entregado. Puedes cambiarla cuando quieras, por ejemplo para una promoción. Aplica a los pedidos que se entreguen desde que guardas.</p>' +
+      '<p class="hint"><b>' + esc(nowTxt()) + '</b></p>' +
+      '<label class="role" style="display:block;margin-bottom:10px"><input type="radio" name="cm-modo" value="pct"' + (d.modo === 'pct' ? ' checked' : '') + '><span class="card-r"><b>Porcentaje del envío</b><small>Se descuenta un % de lo que paga el negocio por el envío.</small></span></label>' +
+      '<div class="field"><label for="cm-pct">Porcentaje (%)</label><input id="cm-pct" type="number" inputmode="decimal" min="0" max="100" step="0.5" value="' + esc(String(d.pct)) + '"></div>' +
+      '<label class="role" style="display:block;margin:14px 0 10px"><input type="radio" name="cm-modo" value="fijo"' + (d.modo === 'fijo' ? ' checked' : '') + '><span class="card-r"><b>Cantidad fija por pedido</b><small>Se descuenta lo mismo en cada pedido, cobre lo que cobre el repartidor.</small></span></label>' +
+      '<div class="field"><label for="cm-fijo">Cantidad por pedido ($)</label><input id="cm-fijo" type="number" inputmode="decimal" min="0" max="500" step="0.01" value="' + esc(String(d.fijo)) + '"></div>' +
+      '<button class="btn primary block" type="button" data-cact="save" style="margin-top:10px">Guardar comisión</button>';
+  }
+  function sync() {
+    if (view() !== 'admin' || S.tab !== 'zonas' || S.isAgent || S.isPartner) { ed.hidden = true; return; }
+    ed.hidden = false;
+    if (!d || (!dirty && lastSrc !== src())) { const c = comCfg(); d = { modo: c.modo, pct: c.pct, fijo: c.fijo || 3.28 }; lastSrc = src(); dirty = false; ed.dataset.h = ''; }
+    if (ed.contains(document.activeElement) && /INPUT/.test(document.activeElement.tagName) && document.activeElement.type !== 'radio') return;
+    const h = html(); if (ed.dataset.h !== h) { ed.innerHTML = h; ed.dataset.h = h; }
+  }
+  setInterval(sync, 400);
+  ed.addEventListener('input', (e) => { const t = e.target; if (t.id === 'cm-pct') { d.pct = t.value; dirty = true; } else if (t.id === 'cm-fijo') { d.fijo = t.value; dirty = true; } });
+  ed.addEventListener('change', (e) => { const t = e.target; if (t.name === 'cm-modo') { d.modo = t.value; dirty = true; } });
+  ed.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-cact=save]'); if (!b) return;
+    const pct = Number(d.pct), fijo = Number(d.fijo);
+    if (d.modo === 'pct' && !(pct >= 0 && pct <= 100)) { toast('El porcentaje debe ser de 0 a 100.'); return; }
+    if (d.modo === 'fijo' && !(fijo >= 0 && fijo <= 500)) { toast('La cantidad fija debe ser de $0 a $500.'); return; }
+    const out = { modo: d.modo, pct: isFinite(pct) && d.pct !== '' ? pct : COM_C, fijo: isFinite(fijo) && d.fijo !== '' ? Math.round(fijo * 100) / 100 : 0, actualizado: Date.now() };
+    try { await setDoc(doc(db, 'config', 'comision'), out); dirty = false; lastSrc = ''; ed.dataset.h = ''; toast('Comisión guardada.'); }
+    catch (er) { toast('No se pudo guardar. Intenta de nuevo.'); }
+  });
 })();
