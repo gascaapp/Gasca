@@ -1622,7 +1622,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '2-nov-2026 · 47';
+const APP_V = '2-nov-2026 · 48';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -1920,35 +1920,58 @@ function renderAltas() {
   const el = $('#adminAltas');
   if (document.activeElement && /^(a-motivo|cp-motivo)/.test(document.activeElement.id || '')) return;
   const catOf = (u) => (u && u.role === 'rider' ? 'rep' : isCli(u) ? 'env' : 'res');
-  const cat = S.altaCat || 'rep';
+  const CATS = { rep: ['🛵', 'Repartidores', 'repartidores'], res: ['🏪', 'Restaurantes', 'restaurantes'], env: ['📦', 'Envíos personales', 'envíos personales'] };
   const everyone = S.users.map((u) => ({ u, st: personStatus(u, S.aprobs[u.id]) }));
-  const CATS = [['rep', '🛵', 'Repartidores'], ['res', '🏪', 'Restaurantes'], ['env', '📦', 'Envíos personales']];
-  const seg = '<div class="al-seg">' + CATS.map((c) => { const n = everyone.filter((x) => catOf(x.u) === c[0] && x.st === 'revision').length + (S.cambios || []).filter((cc) => cc.estado === 'pendiente' && catOf(S.users.find((u) => u.id === cc.uid)) === c[0]).length; return '<button type="button" data-act="alta-cat" data-cat="' + c[0] + '" class="' + (cat === c[0] ? 'on' : '') + '"><span>' + c[1] + '</span><b>' + c[2] + '</b>' + (n ? '<i>' + n + '</i>' : '') + '</button>'; }).join('') + '</div>';
-  const all = everyone.filter((x) => catOf(x.u) === cat);
+  const cpsAll = (S.cambios || []).filter((c) => c.estado === 'pendiente').sort((a, b) => (a.creadoEn || 0) - (b.creadoEn || 0));
+  const cpsOf = (c) => cpsAll.filter((x) => catOf(S.users.find((u) => u.id === x.uid)) === c);
+  const nav = (cat, sub) => 'data-act="alta-nav" data-cat="' + (cat || '') + '" data-sub="' + (sub || '') + '"';
+  const card = (ic, t, n, small, attrs, red) => '<button type="button" class="al-card" ' + attrs + '><span class="al-ic">' + ic + '</span><span class="al-t"><b>' + esc(t) + '</b>' + (small ? '<small>' + esc(small) + '</small>' : '') + '</span>' + (n !== null ? '<span class="al-n' + (red ? ' red' : '') + '">' + n + '</span>' : '') + '<i aria-hidden="true">›</i></button>';
+  const cat = CATS[S.altaCat] ? S.altaCat : null, sub = S.altaSub || null;
+  // Pantalla 1: solo los tres botones
+  if (!cat) {
+    el.innerHTML = '<h2 class="section">Altas</h2><p class="hint">Elige qué quieres revisar.</p><div class="al-list">' +
+      Object.keys(CATS).map((c) => { const n = everyone.filter((x) => catOf(x.u) === c && x.st === 'revision').length + cpsOf(c).length; return card(CATS[c][0], CATS[c][1], n || null, n ? n + ' en espera de aprobación' : 'Sin pendientes', nav(c, ''), true); }).join('') + '</div>';
+    return;
+  }
+  const all = everyone.filter((x) => catOf(x.u) === cat), nm = CATS[cat][2], Nm = CATS[cat][1];
   const rev = all.filter((x) => x.st === 'revision').sort((a, b) => (a.u.docsEn || 0) - (b.u.docsEn || 0));
   const apr = all.filter((x) => x.st === 'aprobado');
   const oth = all.filter((x) => x.st === 'incompleto' || x.st === 'rechazado');
-  const cps = (S.cambios || []).filter((c) => c.estado === 'pendiente' && catOf(S.users.find((u) => u.id === c.uid)) === cat).sort((a, b) => (a.creadoEn || 0) - (b.creadoEn || 0));
-  let h = '<h2 class="section">Altas</h2>' + seg + (cps.length ? '<div class="subhead">Cambios de perfil por aprobar (' + cps.length + ')</div>' + cps.map(cambioCard).join('') : '') + '<div class="subhead">Por revisar (' + rev.length + ')</div>';
-  h += rev.length ? rev.map((x) => altaCard(x.u)).join('') : '<p class="hint">Nadie está esperando aprobación.</p>';
-  h += '<div class="subhead">Aprobados (' + apr.length + ')</div>';
-  h += apr.length ? apr.map((x) => {
-    const u = x.u, a = S.aprobs[u.id] || {};
-    return '<div class="pr"><div class="t"><b>' + esc(repTag(u.id) + u.name) + '</b><span class="chip entregado">Aprobado</span></div><small>' + esc(roleLbl(u)) + ' · aprobado ' + ago(a.en || u.creadoEn) + '</small>' + bajaLine(u.id) +
-      (S.suspId === u.id
-        ? '<div class="actions"><button class="btn ghost small" type="button" data-act="susp-no">Conservar</button><button class="btn danger small" type="button" data-act="susp-yes" data-id="' + esc(u.id) + '">Sí, suspender</button></div>'
-        : S.delId === u.id ? delConfirm(u)
-        : '<div class="actions"><button class="btn ghost small" type="button" data-act="susp" data-id="' + esc(u.id) + '">Suspender</button><button class="btn danger small" type="button" data-act="del" data-id="' + esc(u.id) + '">Eliminar</button></div>') + '</div>';
-  }).join('') : '<p class="hint">Todavía no has aprobado a nadie.</p>';
-  if (oth.length) {
-    h += '<div class="subhead">Sin enviar o rechazados (' + oth.length + ')</div>' + oth.map((x) => {
+  const gone = all.filter((x) => x.st === 'eliminado');
+  const cps = cpsOf(cat);
+  const back = (cat2, sub2, txt) => '<button type="button" class="al-back" ' + nav(cat2, sub2) + '>← ' + esc(txt) + '</button>';
+  // Pantalla 2: resumen de la categoría
+  if (!sub) {
+    el.innerHTML = back('', '', 'Altas') + '<h2 class="section">' + esc(Nm) + '</h2><div class="al-list">' +
+      card('✅', Nm + ' dados de alta', apr.length, 'Ya aprobados y activos', nav(cat, 'alta')) +
+      card('⏳', Nm + ' en espera de aprobación', rev.length, rev.length ? 'Toca para aprobar o rechazar' : 'Nadie esperando', nav(cat, 'espera'), rev.length > 0) +
+      card('⛔', Nm + ' dados de baja', gone.length, 'Eliminados', nav(cat, 'baja')) +
+      card('📝', 'Sin enviar o rechazados', oth.length, 'Faltan documentos o se rechazaron', nav(cat, 'otros')) +
+      (cps.length ? card('🔄', 'Cambios de perfil por aprobar', cps.length, '', nav(cat, 'cambios'), true) : '') + '</div>';
+    return;
+  }
+  // Pantalla 3: la lista
+  const TT = { alta: 'dados de alta', espera: 'en espera de aprobación', baja: 'dados de baja', otros: 'sin enviar o rechazados', cambios: 'con cambios de perfil' };
+  const cnt = { alta: apr.length, espera: rev.length, baja: gone.length, otros: oth.length, cambios: cps.length }[sub];
+  let h = back(cat, '', Nm) + '<h2 class="section">' + esc(Nm) + ' ' + (TT[sub] || '') + '</h2><p class="hint"><b>' + (cnt || 0) + '</b> ' + (cnt === 1 ? 'registro' : 'registros') + '</p>';
+  if (sub === 'cambios') h += cps.map(cambioCard).join('') || '<p class="hint">No hay cambios pendientes.</p>';
+  else if (sub === 'espera') h += rev.length ? rev.map((x) => altaCard(x.u)).join('') : '<p class="hint">Nadie está esperando aprobación.</p>';
+  else if (sub === 'alta') {
+    h += apr.length ? apr.map((x) => {
+      const u = x.u, a = S.aprobs[u.id] || {};
+      return '<div class="pr"><div class="t"><b>' + esc(repTag(u.id) + u.name) + '</b><span class="chip entregado">Aprobado</span></div><small>' + esc(roleLbl(u)) + ' · aprobado ' + ago(a.en || u.creadoEn) + '</small>' + bajaLine(u.id) +
+        (S.suspId === u.id
+          ? '<div class="actions"><button class="btn ghost small" type="button" data-act="susp-no">Conservar</button><button class="btn danger small" type="button" data-act="susp-yes" data-id="' + esc(u.id) + '">Sí, suspender</button></div>'
+          : S.delId === u.id ? delConfirm(u)
+          : '<div class="actions"><button class="btn ghost small" type="button" data-act="susp" data-id="' + esc(u.id) + '">Suspender</button><button class="btn danger small" type="button" data-act="del" data-id="' + esc(u.id) + '">Eliminar</button></div>') + '</div>';
+    }).join('') : '<p class="hint">Todavía no has aprobado a nadie aquí.</p>';
+  } else if (sub === 'otros') {
+    h += oth.length ? oth.map((x) => {
       const a = S.aprobs[x.u.id];
       return prRow(x.u.name, verLabel(x.st), '', esc(roleLbl(x.u)) + (x.st === 'rechazado' && a && a.motivo ? ' · ' + esc(a.motivo) : '') + ' · se unió ' + ago(x.u.creadoEn)).replace(/<\/div>$/, S.delId === x.u.id ? delConfirm(x.u) + '</div>' : '<div class="actions"><button class="btn danger small" type="button" data-act="del" data-id="' + esc(x.u.id) + '">Eliminar</button></div></div>');
-    }).join('');
-  }
-  const gone = all.filter((x) => x.st === 'eliminado');
-  if (gone.length) {
-    h += '<div class="subhead">Eliminados (' + gone.length + ')</div>' + gone.map((x) => '<div class="pr"><div class="t"><b>' + esc(repTag(x.u.id) + x.u.name) + '</b><span class="chip cancelado">Eliminado</span></div><small>' + esc(roleLbl(x.u)) + ' · ' + ago((S.aprobs[x.u.id] || {}).en) + '</small><div class="actions"><button class="btn ghost small" type="button" data-act="undel" data-id="' + esc(x.u.id) + '">Restaurar</button></div></div>').join('');
+    }).join('') : '<p class="hint">No hay nadie en esta lista.</p>';
+  } else if (sub === 'baja') {
+    h += gone.length ? gone.map((x) => '<div class="pr"><div class="t"><b>' + esc(repTag(x.u.id) + x.u.name) + '</b><span class="chip cancelado">Eliminado</span></div><small>' + esc(roleLbl(x.u)) + ' · ' + ago((S.aprobs[x.u.id] || {}).en) + '</small><div class="actions"><button class="btn ghost small" type="button" data-act="undel" data-id="' + esc(x.u.id) + '">Restaurar</button></div></div>').join('') : '<p class="hint">No hay nadie dado de baja.</p>';
   }
   el.innerHTML = h;
 }
@@ -2198,7 +2221,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'ag-work') { S.incAg = b.getAttribute('data-e'); S.tab = 'incidencias'; render(); }
   else if (act === 'inc-ag') { S.incAg = b.getAttribute('data-e'); render(); }
   else if (act === 'ped-f') { S.pedF = b.getAttribute('data-f'); render(); }
-  else if (act === 'tab') { S.tab = b.getAttribute('data-tab'); S.newOk = S.tab === 'nuevo'; S.cancelId = null; render(); }
+  else if (act === 'tab') { S.tab = b.getAttribute('data-tab'); if (S.tab === 'altas') { S.altaCat = null; S.altaSub = null; } S.newOk = S.tab === 'nuevo'; S.cancelId = null; render(); }
   else if (act === 'cancel') { S.cancelId = id; render(); }
   else if (act === 'cancel-no') { S.cancelId = null; render(); }
   else if (act === 'cancel-yes') cancelOrder(id);
@@ -2247,7 +2270,7 @@ document.addEventListener('click', (e) => {
   else if (act === 'issue') askIssue(id);
   else if (act === 'noans') askNoAns(id);
   else if (act === 'libcode') askLib(id);
-  else if (act === 'alta-cat') { S.altaCat = b.getAttribute('data-cat') || 'rep'; render(); }
+  else if (act === 'alta-nav') { S.altaCat = b.getAttribute('data-cat') || null; S.altaSub = b.getAttribute('data-sub') || null; S.review = null; S.revPhotos = null; S.motivo = ''; S.suspId = null; S.delId = null; render(); try { window.scrollTo(0, 0); } catch (e) {} }
   else if (act === 'gula-open') gulaOpen();
   else if (act === 'gula-fill') gulaFill();
   else if (act === 'gula-close') { const m = document.getElementById('gulaModal'); if (m) m.remove(); }
@@ -4499,4 +4522,4 @@ function gulaFill() {
 })();
 
 /* ---------- Altas separadas: repartidores, restaurantes y envíos personales ---------- */
-(() => { const st = document.createElement('style'); st.textContent = '.al-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:6px 0 14px}.al-seg button{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;border:2px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer;min-height:70px;-webkit-tap-highlight-color:transparent}.al-seg button span{font-size:22px;line-height:1}.al-seg button b{font-size:13px;line-height:1.15;text-align:center}.al-seg button.on{border-color:#f6b400;box-shadow:0 0 0 3px rgba(246,180,0,.35)}.al-seg button i{position:absolute;top:-7px;right:-4px;min-width:22px;height:22px;border-radius:11px;background:#e11d48;color:#fff;font-style:normal;font-weight:800;font-size:13px;display:grid;place-items:center;padding:0 5px}'; document.head.appendChild(st); })();
+(() => { const st = document.createElement('style'); st.textContent = '.al-list{display:flex;flex-direction:column;gap:12px;margin-top:10px}.al-card{position:relative;display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--surface);color:var(--ink);border:2px solid var(--line);border-radius:20px;padding:16px;font:inherit;cursor:pointer;min-height:76px;-webkit-tap-highlight-color:transparent}.al-card:active{transform:scale(.98)}.al-ic{flex:none;font-size:34px;line-height:1;width:44px;text-align:center}.al-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.al-t b{font-size:19px;line-height:1.2}.al-t small{font-size:14px;opacity:.7}.al-n{flex:none;min-width:38px;height:38px;border-radius:19px;background:var(--surface2);color:var(--ink);font-weight:800;font-size:18px;display:grid;place-items:center;padding:0 10px}.al-n.red{background:#e11d48;color:#fff}.al-card i{flex:none;font-style:normal;font-size:26px;opacity:.4}.al-back{display:inline-flex;align-items:center;margin:0 0 8px;background:var(--surface);color:var(--ink);border:2px solid var(--line);border-radius:14px;font:inherit;font-weight:800;padding:10px 16px;min-height:46px;cursor:pointer}'; document.head.appendChild(st); })();
