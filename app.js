@@ -178,6 +178,12 @@ const VER = {
     { k: 'moto', t: 'Foto de la moto', h: 'Toda la moto de lado, de la llanta de adelante a la de atrás.' },
     { k: 'placa', t: 'Placa de la moto', h: 'La moto vista por detrás, con la placa bien legible.' }
   ],
+  rider_basico: [
+    { k: 'selfie', t: 'Selfie', h: 'Una foto de tu cara, de frente y con buena luz. Sin lentes oscuros ni gorra. Es la foto que verán los negocios.', selfie: true },
+    { k: 'ine', t: 'INE por el frente', h: 'Foto de tu INE por el frente. Que se vean tu foto y tus datos completos.' },
+    { k: 'ine_atras', t: 'INE por atrás', h: 'Foto de tu INE por la parte de atrás. Que se lea todo.' },
+    { k: 'domicilio', t: 'Comprobante de domicilio', h: 'Recibo de luz, agua, teléfono o estado de cuenta reciente. Que se vea completo.' }
+  ],
   shop: [
     { k: 'ine', t: 'INE del dueño o encargado', h: 'Foto de la INE por el frente. Que se vean la foto y los datos completos.' },
     { k: 'domicilio', t: 'Comprobante de domicilio', h: 'Recibo de luz, agua, teléfono o estado de cuenta reciente. Que se vea completo.' },
@@ -193,7 +199,15 @@ const VER_CLI = [
   { k: 'ine', t: 'INE por el frente', h: 'Foto de tu INE por el frente. Que se vean tu foto y tus datos completos.' },
   { k: 'ine_atras', t: 'INE por atrás', h: 'Foto de tu INE por la parte de atrás. Que se lea todo.' }
 ];
-const slotsFor = (u) => (isCli(u) ? VER_CLI : VER[u && u.role] || []);
+/* Registro de repartidores: "basico" (selfie, INE y comprobante de domicilio) o "completo" (además licencia, moto y placa).
+   Quien ya envió sus documentos se queda con el que usó; el cambio solo afecta a los que se registren después. */
+const regModo = () => (S.regCfg && S.regCfg.repartidor === 'basico' ? 'basico' : 'completo');
+function riderModoDe(u) {
+  const f = u && Array.isArray(u.fotos) ? u.fotos : null;
+  if (f && f.length) { if (f.indexOf('licencia') >= 0) return 'completo'; if (f.indexOf('domicilio') >= 0) return 'basico'; }
+  return regModo();
+}
+const slotsFor = (u) => (isCli(u) ? VER_CLI : (u && u.role === 'rider' && riderModoDe(u) === 'basico') ? VER.rider_basico : VER[u && u.role] || []);
 const telEmail = (x) => { const d = String(x || '').replace(/\D/g, ''); return d.length >= 10 ? d.slice(-10) + TEL_DOM : ''; };
 const telOf = (email) => { const e = String(email || ''); if (!e.endsWith(TEL_DOM)) return ''; const l = e.slice(0, -TEL_DOM.length); return /^\d+$/.test(l) ? l : ''; };
 function fotoOk(k) { return !!safeImg(S.fotos[k]) && (!(S.profile && S.profile.cambioEn) || ((S.fotosT || {})[k] || 0) > S.profile.cambioEn); }
@@ -496,6 +510,7 @@ function startPerson() {
     if (S.profile) { S.role = S.profile.role; S.name = S.profile.name || ''; S.addr = isCli(S.profile) ? '' : (S.profile.addr || ''); if (!S.tab) S.tab = S.role === 'rider' ? 'disp' : 'nuevo'; }
     syncRole(); render();
   });
+  listen(unsubs, doc(db, 'config', 'registro'), (s) => { S.regCfg = s.exists() ? s.data() : null; render(); });
   unsubs.push(onSnapshot(doc(db, 'cambiosPerfil', S.uid), (s) => {
     const was = S.cambio; S.cambio = s.exists() ? s.data() : null;
     if (was && was.estado === 'pendiente' && S.cambio) {
@@ -790,6 +805,7 @@ function startAdmin() {
   listen(unsubs, doc(db, 'config', 'pago'), (s) => { S.pago = (s.exists() && s.data().texto) || ''; render(); });
   listen(unsubs, doc(db, 'config', 'zonas'), (s) => { S.zonas = (s.exists() && Array.isArray(s.data().zonas)) ? s.data().zonas : []; S.radioKm = (s.exists() && Number(s.data().radioKm)) || 3; render(); });
   listen(unsubs, doc(db, 'config', 'tarifas'), (s) => { S.tarifas = s.exists() ? s.data() : null; });
+  listen(unsubs, doc(db, 'config', 'registro'), (s) => { S.regCfg = s.exists() ? s.data() : null; render(); });
   listen(unsubs, doc(db, 'config', 'comision'), (s) => { S.com = s.exists() ? s.data() : null; render(); });
   if (!S.isAgent) listen(unsubs, doc(db, 'config', 'pruebas'), (s) => { S.pruebas = (s.exists() && s.data().ids) || {}; render(); });
   listen(unsubs, query(collection(db, 'incidencias'), orderBy('creadoEn', 'desc'), limit(200)), (snap) => {
@@ -1418,7 +1434,7 @@ function renderVerify() {
   }
   if (st === 'eliminado' && S.swr) { renderSwitch(el); return; }
   const a = S.myAprob;
-  let h = headH + '<p class="lede">' + (S.role === 'rider' ? 'Para recibir pedidos necesitamos 7 fotos. Solo sirven para confirmar quién eres.' : isCli(S.profile) ? 'Para pedir mandaditos necesitamos 3 fotos: tu selfie y tu INE por los dos lados. Solo sirven para confirmar quién eres.' : 'Para pedir motos necesitamos 3 fotos. Solo sirven para confirmar tu negocio.') + '</p>';
+  let h = headH + '<p class="lede">' + (S.role === 'rider' ? 'Para recibir pedidos necesitamos ' + slots.length + ' fotos. Solo sirven para confirmar quién eres.' : isCli(S.profile) ? 'Para pedir mandaditos necesitamos 3 fotos: tu selfie y tu INE por los dos lados. Solo sirven para confirmar quién eres.' : 'Para pedir motos necesitamos 3 fotos. Solo sirven para confirmar tu negocio.') + '</p>';
   if (st === 'eliminado') h += '<div class="banner"><b>Tu cuenta fue dada de baja.</b> Si quieres volver a usar Gasca, revisa tus documentos y envíalos otra vez. La administración los revisará con atención.</div><button class="btn ghost block" type="button" data-act="swr-open" style="margin:10px 0">Quiero entrar con otro perfil</button>';
   if (st === 'rechazado') h += '<div class="banner"><b>No se aprobaron tus documentos.</b> ' + esc(a && a.motivo ? a.motivo : 'Revisa las fotos y súbelas de nuevo.') + '</div>';
   let ready = 0;
@@ -1606,7 +1622,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '1-nov-2026 · 45';
+const APP_V = '2-nov-2026 · 46';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -4449,5 +4465,29 @@ function gulaFill() {
     const out = { modo: d.modo, pct: isFinite(pct) && d.pct !== '' ? pct : COM_C, fijo: isFinite(fijo) && d.fijo !== '' ? Math.round(fijo * 100) / 100 : 0, actualizado: Date.now() };
     try { await setDoc(doc(db, 'config', 'comision'), out); dirty = false; lastSrc = ''; ed.dataset.h = ''; toast('Comisión guardada.'); }
     catch (er) { toast('No se pudo guardar. Intenta de nuevo.'); }
+  });
+})();
+
+/* ---------- tipo de registro de repartidores (lo cambia el dueño en Ajustes) ---------- */
+(function () {
+  const z = document.getElementById('comEd'); if (!z) return;
+  const ed = document.createElement('div'); ed.id = 'regEd'; ed.className = 'stack'; ed.hidden = true; z.after(ed);
+  function html() {
+    const m = regModo();
+    return '<h2 class="section">Registro de repartidores</h2><p class="hint">Elige qué documentos piden a los repartidores <b>nuevos</b>. Quien ya envió sus documentos se queda como está: no se le pide nada más.</p>' +
+      '<p class="hint"><b>Ahora: ' + (m === 'basico' ? 'Básico' : 'Completo') + '.</b></p>' +
+      '<label class="role" style="display:block;margin-bottom:10px"><input type="radio" name="rg-modo" value="basico"' + (m === 'basico' ? ' checked' : '') + '><span class="card-r"><b>Básico · 4 fotos</b><small>Selfie, INE por los dos lados y comprobante de domicilio.</small></span></label>' +
+      '<label class="role" style="display:block;margin-bottom:10px"><input type="radio" name="rg-modo" value="completo"' + (m === 'completo' ? ' checked' : '') + '><span class="card-r"><b>Completo · 7 fotos</b><small>Todo lo anterior, sin domicilio, más licencia, tarjeta de circulación, foto de la moto y placa.</small></span></label>';
+  }
+  function sync() {
+    if (view() !== 'admin' || S.tab !== 'zonas' || S.isAgent || S.isPartner) { ed.hidden = true; return; }
+    ed.hidden = false; const h = html(); if (ed.dataset.h !== h) { ed.innerHTML = h; ed.dataset.h = h; }
+  }
+  setInterval(sync, 400);
+  ed.addEventListener('change', async (e) => {
+    const t = e.target; if (t.name !== 'rg-modo') return;
+    const v = t.value === 'basico' ? 'basico' : 'completo';
+    try { await setDoc(doc(db, 'config', 'registro'), { repartidor: v, actualizado: Date.now() }); toast('Registro de repartidores: ' + (v === 'basico' ? 'Básico' : 'Completo') + '.'); }
+    catch (er) { toast('No se pudo guardar. Intenta de nuevo.'); ed.dataset.h = ''; }
   });
 })();
