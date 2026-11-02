@@ -138,6 +138,7 @@ const cleanAddr = (a, withState) => {
   return t + (/vallarta/i.test(t) && !/banderas/i.test(t) ? ', Jalisco, México' : ', Nayarit, México');
 };
 const mapsUrl = (a) => 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + encodeURIComponent(cleanAddr(a, true));
+const userTel = (u) => { const a = String((u && u.addr) || ''); const m = /^Tel (\d{10})$/.exec(a) || /^CLIENTE · Tel (\d{10})$/.exec(a); return m ? m[1] : ''; };
 function waUrl(tel) {
   let d = String(tel || '').replace(/\D/g, ''); if (!d) return '';
   if (d.length === 10) d = '52' + d;
@@ -794,7 +795,14 @@ function startAdmin() {
   if (!S.isAgent) listen(unsubs, query(collection(db, 'referidos'), limit(300)), (snap) => { S.referidos = snap.docs.map((d) => Object.assign({ uid: d.id }, d.data())); render(); });
   unsubs.push(onSnapshot(query(collection(db, 'liberados'), limit(500)), (snap) => { const m = {}; snap.docs.forEach((d) => { m[d.id] = (d.data() || {}).driverId || '-'; }); S.libres = m; render(); }, () => {}));
   listen(unsubs, query(collection(db, 'orders'), orderBy('creadoEn', 'desc'), limit(200)), (snap) => { S.myOrders = orderDocs(snap); mergeOrders(); render(); });
-  listen(unsubs, query(collection(db, 'users'), limit(500)), (snap) => { S.users = snap.docs.map((d) => d.data()).filter((u) => u && u.id && u.role && u.name); render(); });
+  listen(unsubs, query(collection(db, 'users'), limit(500)), (snap) => {
+    S.users = snap.docs.map((d) => d.data()).filter((u) => u && u.id && u.role && u.name);
+    try {
+      if (!S.usersKnown) S.usersKnown = new Set(S.users.map((u) => u.id));
+      else S.users.forEach((u) => { if (!S.usersKnown.has(u.id)) { S.usersKnown.add(u.id); if (personStatus(u, S.aprobs[u.id]) === 'incompleto') { beep([784, 988, 1175]); buzz(); toast('Nuevo registro: ' + u.name + ' (' + roleLbl(u) + ')' + (userTel(u) ? ' · ' + userTel(u) : '')); } } });
+    } catch (e) {}
+    render();
+  });
   listen(unsubs, query(collection(db, 'aprobaciones'), limit(500)), (snap) => { const m = {}; snap.docs.forEach((d) => { m[d.id] = d.data(); }); S.aprobs = m; render(); assignRepNos(); });
   if (!S.isAgent) listen(unsubs, query(collection(db, 'recargas'), orderBy('creadoEn', 'desc'), limit(300)), (snap) => { S.recargas = snap.docs.map((d) => d.data()).filter((r) => r && r.id && r.estado); render(); });
   if (!S.isAgent) unsubs.push(onSnapshot(query(collection(db, 'cambiosPerfil'), limit(200)), (snap) => { S.cambios = snap.docs.map((d) => d.data()).filter((c) => c && c.uid); render(); }, () => {}));
@@ -1622,7 +1630,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '2-nov-2026 · 48';
+const APP_V = '2-nov-2026 · 49';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -1930,13 +1938,14 @@ function renderAltas() {
   // Pantalla 1: solo los tres botones
   if (!cat) {
     el.innerHTML = '<h2 class="section">Altas</h2><p class="hint">Elige qué quieres revisar.</p><div class="al-list">' +
-      Object.keys(CATS).map((c) => { const n = everyone.filter((x) => catOf(x.u) === c && x.st === 'revision').length + cpsOf(c).length; return card(CATS[c][0], CATS[c][1], n || null, n ? n + ' en espera de aprobación' : 'Sin pendientes', nav(c, ''), true); }).join('') + '</div>';
+      Object.keys(CATS).map((c) => { const nr = everyone.filter((x) => catOf(x.u) === c && x.st === 'revision').length, np = everyone.filter((x) => catOf(x.u) === c && x.st === 'incompleto').length, n = nr + np + cpsOf(c).length; return card(CATS[c][0], CATS[c][1], n || null, n ? [nr ? nr + ' por aprobar' : '', np ? np + ' pre-registrado' + (np > 1 ? 's' : '') : ''].filter(Boolean).join(' · ') || n + ' por atender' : 'Sin pendientes', nav(c, ''), true); }).join('') + '</div>';
     return;
   }
   const all = everyone.filter((x) => catOf(x.u) === cat), nm = CATS[cat][2], Nm = CATS[cat][1];
   const rev = all.filter((x) => x.st === 'revision').sort((a, b) => (a.u.docsEn || 0) - (b.u.docsEn || 0));
   const apr = all.filter((x) => x.st === 'aprobado');
-  const oth = all.filter((x) => x.st === 'incompleto' || x.st === 'rechazado');
+  const pre = all.filter((x) => x.st === 'incompleto').sort((a, b) => (b.u.creadoEn || 0) - (a.u.creadoEn || 0));
+  const oth = all.filter((x) => x.st === 'rechazado');
   const gone = all.filter((x) => x.st === 'eliminado');
   const cps = cpsOf(cat);
   const back = (cat2, sub2, txt) => '<button type="button" class="al-back" ' + nav(cat2, sub2) + '>← ' + esc(txt) + '</button>';
@@ -1945,14 +1954,15 @@ function renderAltas() {
     el.innerHTML = back('', '', 'Altas') + '<h2 class="section">' + esc(Nm) + '</h2><div class="al-list">' +
       card('✅', Nm + ' dados de alta', apr.length, 'Ya aprobados y activos', nav(cat, 'alta')) +
       card('⏳', Nm + ' en espera de aprobación', rev.length, rev.length ? 'Toca para aprobar o rechazar' : 'Nadie esperando', nav(cat, 'espera'), rev.length > 0) +
+      card('🆕', 'Pre-registrados (sin fotos)', pre.length, pre.length ? 'Ya se registraron. Falta que suban sus fotos' : 'Nadie por ahora', nav(cat, 'pre'), pre.length > 0) +
       card('⛔', Nm + ' dados de baja', gone.length, 'Eliminados', nav(cat, 'baja')) +
-      card('📝', 'Sin enviar o rechazados', oth.length, 'Faltan documentos o se rechazaron', nav(cat, 'otros')) +
+      card('❌', 'Rechazados', oth.length, 'Documentos rechazados', nav(cat, 'otros')) +
       (cps.length ? card('🔄', 'Cambios de perfil por aprobar', cps.length, '', nav(cat, 'cambios'), true) : '') + '</div>';
     return;
   }
   // Pantalla 3: la lista
-  const TT = { alta: 'dados de alta', espera: 'en espera de aprobación', baja: 'dados de baja', otros: 'sin enviar o rechazados', cambios: 'con cambios de perfil' };
-  const cnt = { alta: apr.length, espera: rev.length, baja: gone.length, otros: oth.length, cambios: cps.length }[sub];
+  const TT = { alta: 'dados de alta', espera: 'en espera de aprobación', pre: 'pre-registrados (sin fotos)', baja: 'dados de baja', otros: 'rechazados', cambios: 'con cambios de perfil' };
+  const cnt = { alta: apr.length, espera: rev.length, pre: pre.length, baja: gone.length, otros: oth.length, cambios: cps.length }[sub];
   let h = back(cat, '', Nm) + '<h2 class="section">' + esc(Nm) + ' ' + (TT[sub] || '') + '</h2><p class="hint"><b>' + (cnt || 0) + '</b> ' + (cnt === 1 ? 'registro' : 'registros') + '</p>';
   if (sub === 'cambios') h += cps.map(cambioCard).join('') || '<p class="hint">No hay cambios pendientes.</p>';
   else if (sub === 'espera') h += rev.length ? rev.map((x) => altaCard(x.u)).join('') : '<p class="hint">Nadie está esperando aprobación.</p>';
@@ -1965,6 +1975,13 @@ function renderAltas() {
           : S.delId === u.id ? delConfirm(u)
           : '<div class="actions"><button class="btn ghost small" type="button" data-act="susp" data-id="' + esc(u.id) + '">Suspender</button><button class="btn danger small" type="button" data-act="del" data-id="' + esc(u.id) + '">Eliminar</button></div>') + '</div>';
     }).join('') : '<p class="hint">Todavía no has aprobado a nadie aquí.</p>';
+  } else if (sub === 'pre') {
+    h += pre.length ? '<p class="hint">Estas personas ya se registraron con su nombre y teléfono, pero todavía no suben sus fotos. Contáctalas para que terminen.</p>' + pre.map((x) => {
+      const u = x.u, t = userTel(u);
+      return '<div class="pr"><div class="t"><b>' + esc(repTag(u.id) + u.name) + '</b><span class="chip abierto">Sin fotos</span></div><small>' + esc(roleLbl(u)) + ' · se registró ' + ago(u.creadoEn) + '</small>' + bajaLine(u.id) +
+        (t ? '<div class="line"><span class="k">Teléfono</span><span class="v"><b>' + esc(t) + '</b></span></div><div class="links"><a href="' + esc(waUrl(t)) + '" target="_blank" rel="noopener">💬 WhatsApp</a><a href="tel:' + esc(t) + '">📞 Llamar</a></div>' : '') +
+        (S.delId === u.id ? delConfirm(u) : '<div class="actions"><button class="btn danger small" type="button" data-act="del" data-id="' + esc(u.id) + '">Eliminar</button></div>') + '</div>';
+    }).join('') : '<p class="hint">No hay pre-registrados.</p>';
   } else if (sub === 'otros') {
     h += oth.length ? oth.map((x) => {
       const a = S.aprobs[x.u.id];
@@ -2028,7 +2045,7 @@ function renderAdmin() {
   }
   const all = [
     { id: 'monitor', label: 'En vivo', badge: S.orders.filter((o) => o.estado === 'abierto').length },
-    { id: 'altas', label: 'Altas', badge: S.users.filter((u) => personStatus(u, S.aprobs[u.id]) === 'revision').length + (S.cambios || []).filter((c) => c.estado === 'pendiente').length },
+    { id: 'altas', label: 'Altas', badge: S.users.filter((u) => { const st = personStatus(u, S.aprobs[u.id]); return st === 'revision' || st === 'incompleto'; }).length + (S.cambios || []).filter((c) => c.estado === 'pendiente').length },
     { id: 'recargas', label: 'Recargas', badge: pend.length },
     { id: 'pedidos', label: 'Pedidos', badge: S.orders.filter((o) => o.estado === 'asignado' || o.estado === 'recogido').length },
     { id: 'incidencias', label: 'Incidencias', badge: S.incs.filter((x) => x.estado === 'abierta').length },
