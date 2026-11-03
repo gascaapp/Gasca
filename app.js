@@ -1630,7 +1630,7 @@ function mpDiv() {
   if (!el) { el = document.createElement('div'); el.id = 'riderPed'; el.hidden = true; const ref = document.getElementById('riderWallet'); ref.parentNode.insertBefore(el, ref); }
   return el;
 }
-const APP_V = '2-nov-2026 · 49';
+const APP_V = '2-nov-2026 · 50';
 function renderPerfil(el) {
   const dot = document.getElementById('gDot'); if (dot) dot.classList.toggle('off', !S.online);
   let opts = 0; try { const i = window.__gmInfo && window.__gmInfo(); opts = i && i.opts ? i.opts.length : 0; } catch (e) {}
@@ -4494,7 +4494,7 @@ function gulaFill() {
       '<button class="btn primary block" type="button" data-cact="save" style="margin-top:10px">Guardar comisión</button>';
   }
   function sync() {
-    if (view() !== 'admin' || S.tab !== 'zonas' || S.isAgent || S.isPartner) { ed.hidden = true; return; }
+    if (view() !== 'admin' || S.tab !== 'zonas' || S.isAgent) { ed.hidden = true; return; }
     ed.hidden = false;
     if (!d || (!dirty && lastSrc !== src())) { const c = comCfg(); d = { modo: c.modo, pct: c.pct, fijo: c.fijo || 3.28 }; lastSrc = src(); dirty = false; ed.dataset.h = ''; }
     if (ed.contains(document.activeElement) && /INPUT/.test(document.activeElement.tagName) && document.activeElement.type !== 'radio') return;
@@ -4526,7 +4526,7 @@ function gulaFill() {
       '<label class="role" style="display:block;margin-bottom:10px"><input type="radio" name="rg-modo" value="completo"' + (m === 'completo' ? ' checked' : '') + '><span class="card-r"><b>Completo · 7 fotos</b><small>Todo lo anterior, sin domicilio, más licencia, tarjeta de circulación, foto de la moto y placa.</small></span></label>';
   }
   function sync() {
-    if (view() !== 'admin' || S.tab !== 'zonas' || S.isAgent || S.isPartner) { ed.hidden = true; return; }
+    if (view() !== 'admin' || S.tab !== 'zonas' || S.isAgent) { ed.hidden = true; return; }
     ed.hidden = false; const h = html(); if (ed.dataset.h !== h) { ed.innerHTML = h; ed.dataset.h = h; }
   }
   setInterval(sync, 400);
